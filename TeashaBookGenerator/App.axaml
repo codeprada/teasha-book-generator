@@ -1,0 +1,33 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="TeashaBookGenerator.App"
+             xmlns:local="using:TeashaBookGenerator"
+             RequestedThemeVariant="Default">
+             <!-- "Default" ThemeVariant follows system theme variant. "Dark" or "Light" are other available options. -->
+
+    <Application.DataTemplates>
+        <local:ViewLocator/>
+    </Application.DataTemplates>
+
+    <Application.Resources>
+        <FontFamily x:Key="OpenSansFont">avares://TeashaBookGenerator/Assets/Fonts/OpenSans-Regular.ttf#Open Sans</FontFamily>
+        <FontFamily x:Key="RobotoFont">avares://TeashaBookGenerator/Assets/Fonts/Roboto-Regular.ttf#Roboto</FontFamily>
+        <FontFamily x:Key="LatoFont">avares://TeashaBookGenerator/Assets/Fonts/Lato-Regular.ttf#Lato</FontFamily>
+        <FontFamily x:Key="MerriweatherFont">avares://TeashaBookGenerator/Assets/Fonts/Merriweather-Regular.ttf#Merriweather</FontFamily>
+        <FontFamily x:Key="PlayfairDisplayFont">avares://TeashaBookGenerator/Assets/Fonts/PlayfairDisplay-Regular.ttf#Playfair Display</FontFamily>
+        <FontFamily x:Key="MontserratFont">avares://TeashaBookGenerator/Assets/Fonts/Montserrat-Regular.ttf#Montserrat</FontFamily>
+        <FontFamily x:Key="OswaldFont">avares://TeashaBookGenerator/Assets/Fonts/Oswald-Regular.ttf#Oswald</FontFamily>
+        <FontFamily x:Key="RalewayFont">avares://TeashaBookGenerator/Assets/Fonts/Raleway-Regular.ttf#Raleway</FontFamily>
+        <FontFamily x:Key="SourceSans3Font">avares://TeashaBookGenerator/Assets/Fonts/SourceSans3-Regular.ttf#Source Sans 3</FontFamily>
+        <FontFamily x:Key="PoppinsFont">avares://TeashaBookGenerator/Assets/Fonts/Poppins-Regular.ttf#Poppins</FontFamily>
+        <FontFamily x:Key="NunitoFont">avares://TeashaBookGenerator/Assets/Fonts/Nunito-Regular.ttf#Nunito</FontFamily>
+        <FontFamily x:Key="PTSerifFont">avares://TeashaBookGenerator/Assets/Fonts/PTSerif-Regular.ttf#PT Serif</FontFamily>
+        <FontFamily x:Key="RobotoMonoFont">avares://TeashaBookGenerator/Assets/Fonts/RobotoMono-Regular.ttf#Roboto Mono</FontFamily>
+        <FontFamily x:Key="DancingScriptFont">avares://TeashaBookGenerator/Assets/Fonts/DancingScript-Regular.ttf#Dancing Script</FontFamily>
+        <FontFamily x:Key="PacificoFont">avares://TeashaBookGenerator/Assets/Fonts/Pacifico-Regular.ttf#Pacifico</FontFamily>
+    </Application.Resources>
+
+    <Application.Styles>
+        <FluentTheme />
+    </Application.Styles>
+</Application>
