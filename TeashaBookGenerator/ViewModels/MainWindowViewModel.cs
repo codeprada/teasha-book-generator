@@ -7,6 +7,7 @@ using System.IO;
 using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
+using Avalonia.Controls;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -21,6 +22,33 @@ public enum DrawingMode
     None,
     DrawText,
     DrawImage
+}
+
+/// <summary>Represents a single page in the book, holding its overlays and metadata.</summary>
+public class BookPage : ObservableObject
+{
+    private string _title = "Untitled";
+    public string Title
+    {
+        get => _title;
+        set => SetProperty(ref _title, value);
+    }
+
+    private string _pageNumber = string.Empty;
+    public string PageNumber
+    {
+        get => _pageNumber;
+        set => SetProperty(ref _pageNumber, value);
+    }
+
+    public ObservableCollection<OverlayRegion> Overlays { get; } = [];
+
+    public int TextCount { get; set; }
+    public int ImageCount { get; set; }
+
+    public string DisplayLabel => string.IsNullOrWhiteSpace(PageNumber)
+        ? Title
+        : $"{Title} (p.{PageNumber})";
 }
 
 public partial class MainWindowViewModel : ViewModelBase
@@ -64,6 +92,22 @@ public partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty]
     private DrawingMode _drawingMode;
 
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CurrentPageTitle))]
+    [NotifyPropertyChangedFor(nameof(CurrentPageNumber))]
+    [NotifyPropertyChangedFor(nameof(PageNavigationText))]
+    [NotifyPropertyChangedFor(nameof(HasPages))]
+    [NotifyPropertyChangedFor(nameof(CanGoPreviousPage))]
+    [NotifyPropertyChangedFor(nameof(CanGoNextPage))]
+    private BookPage? _currentPage;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(PageNavigationText))]
+    [NotifyPropertyChangedFor(nameof(HasPages))]
+    [NotifyPropertyChangedFor(nameof(CanGoPreviousPage))]
+    [NotifyPropertyChangedFor(nameof(CanGoNextPage))]
+    private int _currentPageIndex;
+
     public bool IsDrawingMode => DrawingMode != DrawingMode.None;
 
     public TextOverlayRegion? SelectedTextOverlay => SelectedOverlay as TextOverlayRegion;
@@ -72,19 +116,50 @@ public partial class MainWindowViewModel : ViewModelBase
     public bool IsImageOverlaySelected => SelectedOverlay is ImageOverlayRegion;
 
     public ObservableCollection<OverlayRegion> Overlays { get; } = [];
+    public ObservableCollection<BookPage> Pages { get; } = [];
 
     public ObservableCollection<EmbeddedFont> AvailableFonts { get; } = [];
-
     public ObservableCollection<string> AlignmentOptions { get; } = ["Left", "Center", "Right"];
-
     public ObservableCollection<int> FontSizes { get; } =
         [8, 10, 12, 14, 16, 18, 20, 24, 28, 32, 36, 40, 48, 56, 64, 72, 96, 128];
+
+    public bool HasPages => Pages.Count > 0;
+    public bool CanGoPreviousPage => CurrentPageIndex > 0;
+    public bool CanGoNextPage => CurrentPageIndex < Pages.Count - 1;
+
+    public string PageNavigationText => Pages.Count > 0
+        ? $"Page {CurrentPageIndex + 1} of {Pages.Count}"
+        : "No pages";
+
+    public string CurrentPageTitle
+    {
+        get => CurrentPage?.Title ?? string.Empty;
+        set
+        {
+            if (CurrentPage != null)
+            {
+                CurrentPage.Title = value;
+                OnPropertyChanged(nameof(CurrentPageTitle));
+            }
+        }
+    }
+
+    public string CurrentPageNumber
+    {
+        get => CurrentPage?.PageNumber ?? string.Empty;
+        set
+        {
+            if (CurrentPage != null)
+            {
+                CurrentPage.PageNumber = value;
+                OnPropertyChanged(nameof(CurrentPageNumber));
+            }
+        }
+    }
 
     public event Action? PreviewInvalidated;
 
     private readonly Dictionary<string, string> _fontFileCache = new();
-    private int _textCount;
-    private int _imageCount;
 
     public MainWindowViewModel()
     {
@@ -94,7 +169,7 @@ public partial class MainWindowViewModel : ViewModelBase
 
     private void InitializeFonts()
     {
-        var fonts = new (string displayName, string fileName, string familyName)[]
+        (string displayName, string fileName, string familyName)[] fonts = new (string displayName, string fileName, string familyName)[]
         {
             ("Open Sans", "OpenSans-Regular.ttf", "Open Sans"),
             ("Roboto", "Roboto-Regular.ttf", "Roboto"),
@@ -113,9 +188,9 @@ public partial class MainWindowViewModel : ViewModelBase
             ("Pacifico", "Pacifico-Regular.ttf", "Pacifico"),
         };
 
-        foreach (var (displayName, fileName, familyName) in fonts)
+        foreach ((string displayName, string fileName, string familyName) in fonts)
         {
-            var resourcePath = $"avares://TeashaBookGenerator/Assets/Fonts/{fileName}";
+            string resourcePath = $"avares://TeashaBookGenerator/Assets/Fonts/{fileName}";
             AvailableFonts.Add(new EmbeddedFont
             {
                 DisplayName = displayName,
@@ -127,17 +202,17 @@ public partial class MainWindowViewModel : ViewModelBase
 
     private string GetFontFilePath(EmbeddedFont font)
     {
-        if (_fontFileCache.TryGetValue(font.ResourcePath, out var cached) && File.Exists(cached))
+        if (_fontFileCache.TryGetValue(font.ResourcePath, out string? cached) && File.Exists(cached))
             return cached;
 
         Directory.CreateDirectory(FontCacheDir);
 
-        var uri = new Uri(font.ResourcePath);
-        var assets = Avalonia.Platform.AssetLoader.Open(uri);
-        var fileName = Path.GetFileName(uri.AbsolutePath);
-        var destPath = Path.Combine(FontCacheDir, fileName);
+        Uri uri = new Uri(font.ResourcePath);
+        Stream assets = Avalonia.Platform.AssetLoader.Open(uri);
+        string fileName = Path.GetFileName(uri.AbsolutePath);
+        string destPath = Path.Combine(FontCacheDir, fileName);
 
-        using (var fs = File.Create(destPath))
+        using (FileStream fs = File.Create(destPath))
         {
             assets.CopyTo(fs);
         }
@@ -169,20 +244,24 @@ public partial class MainWindowViewModel : ViewModelBase
         try
         {
             ImagePath = path;
-            var bitmap = new Bitmap(path);
+            Bitmap bitmap = new Bitmap(path);
             ImageSource = bitmap;
             OriginalImageWidth = bitmap.PixelSize.Width;
             OriginalImageHeight = bitmap.PixelSize.Height;
             IsImageLoaded = true;
             Overlays.Clear();
             SelectedOverlay = null;
-            _textCount = 0;
-            _imageCount = 0;
 
-            var dir = Path.GetDirectoryName(path) ?? ".";
-            var name = Path.GetFileNameWithoutExtension(path);
-            var ext = Path.GetExtension(path);
-            OutputPath = Path.Combine(dir, $"{name}_output{ext}");
+            // Clear pages and add a default first page
+            Pages.Clear();
+            BookPage firstPage = new BookPage { Title = "Page 1" };
+            Pages.Add(firstPage);
+            CurrentPageIndex = 0;
+            CurrentPage = firstPage;
+
+            string dir = Path.GetDirectoryName(path) ?? ".";
+            string name = Path.GetFileNameWithoutExtension(path);
+            OutputPath = Path.Combine(dir, $"{name}_output");
 
             StatusMessage = $"Loaded: {Path.GetFileName(path)} ({OriginalImageWidth}x{OriginalImageHeight})";
         }
@@ -191,6 +270,135 @@ public partial class MainWindowViewModel : ViewModelBase
             StatusMessage = $"Error loading image: {ex.Message}";
         }
     }
+
+    #region Page Management
+
+    /// <summary>
+    /// Save the current page's overlays from the active Overlays collection back into the BookPage.
+    /// </summary>
+    private void SaveCurrentPageOverlays()
+    {
+        if (CurrentPage == null) return;
+        CurrentPage.Overlays.Clear();
+        foreach (OverlayRegion overlay in Overlays)
+            CurrentPage.Overlays.Add(overlay);
+    }
+
+    /// <summary>
+    /// Load overlays from a BookPage into the active Overlays collection.
+    /// </summary>
+    private void LoadPageOverlays(BookPage page)
+    {
+        Overlays.Clear();
+        foreach (OverlayRegion overlay in page.Overlays)
+            Overlays.Add(overlay);
+        SelectedOverlay = Overlays.Count > 0 ? Overlays[0] : null;
+    }
+
+    /// <summary>Switch to a page by index. Saves current page overlays first.</summary>
+    public void SwitchToPage(int index)
+    {
+        if (index < 0 || index >= Pages.Count) return;
+
+        // Save current page state
+        SaveCurrentPageOverlays();
+
+        // Clear visuals before switching
+        RequestClearVisuals?.Invoke();
+
+        CurrentPageIndex = index;
+        CurrentPage = Pages[index];
+
+        // Load new page overlays
+        LoadPageOverlays(CurrentPage);
+
+        OnPropertyChanged(nameof(CurrentPageTitle));
+        OnPropertyChanged(nameof(CurrentPageNumber));
+
+        StatusMessage = $"Switched to: {CurrentPage.DisplayLabel}";
+    }
+
+    /// <summary>Raised when the view should clear overlay visuals (before page switch).</summary>
+    public event Action? RequestClearVisuals;
+
+    [RelayCommand]
+    private void AddPage()
+    {
+        if (!IsImageLoaded) return;
+
+        int pageNum = Pages.Count + 1;
+        BookPage newPage = new BookPage
+        {
+            Title = $"Page {pageNum}"
+        };
+
+        // Save current page first
+        SaveCurrentPageOverlays();
+        RequestClearVisuals?.Invoke();
+
+        Pages.Add(newPage);
+        CurrentPageIndex = Pages.Count - 1;
+        CurrentPage = newPage;
+
+        // Clear overlays for the new empty page
+        Overlays.Clear();
+        SelectedOverlay = null;
+
+        OnPropertyChanged(nameof(CurrentPageTitle));
+        OnPropertyChanged(nameof(CurrentPageNumber));
+        OnPropertyChanged(nameof(PageNavigationText));
+        OnPropertyChanged(nameof(HasPages));
+        OnPropertyChanged(nameof(CanGoPreviousPage));
+        OnPropertyChanged(nameof(CanGoNextPage));
+
+        StatusMessage = $"Added new page: {newPage.DisplayLabel}";
+    }
+
+    [RelayCommand]
+    private void RemovePage()
+    {
+        if (Pages.Count <= 1)
+        {
+            StatusMessage = "Cannot remove the last page.";
+            return;
+        }
+
+        RequestClearVisuals?.Invoke();
+
+        string removedTitle = CurrentPage?.DisplayLabel ?? "page";
+        Pages.RemoveAt(CurrentPageIndex);
+
+        // Navigate to valid page
+        int newIndex = Math.Min(CurrentPageIndex, Pages.Count - 1);
+        CurrentPageIndex = newIndex;
+        CurrentPage = Pages[newIndex];
+        LoadPageOverlays(CurrentPage);
+
+        OnPropertyChanged(nameof(CurrentPageTitle));
+        OnPropertyChanged(nameof(CurrentPageNumber));
+        OnPropertyChanged(nameof(PageNavigationText));
+        OnPropertyChanged(nameof(HasPages));
+        OnPropertyChanged(nameof(CanGoPreviousPage));
+        OnPropertyChanged(nameof(CanGoNextPage));
+
+        StatusMessage = $"Removed {removedTitle}";
+    }
+
+    [RelayCommand]
+    private void PreviousPage()
+    {
+        if (CanGoPreviousPage)
+            SwitchToPage(CurrentPageIndex - 1);
+    }
+
+    [RelayCommand]
+    private void NextPage()
+    {
+        if (CanGoNextPage)
+            SwitchToPage(CurrentPageIndex + 1);
+    }
+
+    #endregion
 
     [RelayCommand]
     private void AddTextOverlay()
@@ -210,23 +418,25 @@ public partial class MainWindowViewModel : ViewModelBase
 
     public void CommitNewOverlay(double x, double y, double width, double height)
     {
+        if (CurrentPage == null) return;
+
         OverlayRegion overlay;
         if (DrawingMode == DrawingMode.DrawImage)
         {
-            _imageCount++;
+            CurrentPage.ImageCount++;
             overlay = new ImageOverlayRegion
             {
                 X = x, Y = y, Width = width, Height = height,
-                Label = $"Image {_imageCount}"
+                Label = $"Image {CurrentPage.ImageCount}"
             };
         }
         else
         {
-            _textCount++;
+            CurrentPage.TextCount++;
             overlay = new TextOverlayRegion
             {
                 X = x, Y = y, Width = width, Height = height,
-                Label = $"Text {_textCount}",
+                Label = $"Text {CurrentPage.TextCount}",
                 SelectedFont = AvailableFonts.Count > 0 ? AvailableFonts[0] : null
             };
         }
@@ -242,7 +452,7 @@ public partial class MainWindowViewModel : ViewModelBase
     private void RemoveOverlay()
     {
         if (SelectedOverlay == null) return;
-        var idx = Overlays.IndexOf(SelectedOverlay);
+        int idx = Overlays.IndexOf(SelectedOverlay);
         Overlays.Remove(SelectedOverlay);
         SelectedOverlay = Overlays.Count > 0
             ? Overlays[Math.Min(idx, Overlays.Count - 1)]
@@ -252,32 +462,26 @@ public partial class MainWindowViewModel : ViewModelBase
     [RelayCommand]
     private async Task BrowseOutputAsync()
     {
-        var topLevel = App.TopLevel;
+        TopLevel? topLevel = App.TopLevel;
         if (topLevel == null) return;
 
-        var file = await topLevel.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        IReadOnlyList<IStorageFolder> folder = await topLevel.StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
         {
-            Title = "Save Output Image",
-            SuggestedFileName = Path.GetFileName(OutputPath),
-            FileTypeChoices =
-            [
-                new FilePickerFileType("PNG Image") { Patterns = ["*.png"] },
-                new FilePickerFileType("JPEG Image") { Patterns = ["*.jpg", "*.jpeg"] },
-                new FilePickerFileType("All Files") { Patterns = ["*.*"] }
-            ]
+            Title = "Select Output Folder",
+            AllowMultiple = false
         });
 
-        if (file != null)
-            OutputPath = file.Path.LocalPath;
+        if (folder.Count > 0)
+            OutputPath = folder[0].Path.LocalPath;
     }
 
     [RelayCommand]
     private async Task SaveProjectAsync()
     {
-        var topLevel = App.TopLevel;
+        TopLevel? topLevel = App.TopLevel;
         if (topLevel == null) return;
 
-        var file = await topLevel.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        IStorageFile? file = await topLevel.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
         {
             Title = "Save Project",
             SuggestedFileName = Path.GetFileNameWithoutExtension(ImagePath) + ".tbook",
@@ -291,50 +495,65 @@ public partial class MainWindowViewModel : ViewModelBase
 
         try
         {
-            var projectPath = file.Path.LocalPath;
-            var projectDir = Path.GetDirectoryName(projectPath) ?? ".";
-            var project = new ProjectData
+            // Ensure current page overlays are saved
+            SaveCurrentPageOverlays();
+
+            string projectPath = file.Path.LocalPath;
+            string projectDir = Path.GetDirectoryName(projectPath) ?? ".";
+            ProjectData project = new ProjectData
             {
+                Version = 2,
                 ImagePath = MakeRelativePath(projectDir, ImagePath),
                 OutputPath = MakeRelativePath(projectDir, OutputPath),
             };
 
-            foreach (var overlay in Overlays)
+            foreach (BookPage page in Pages)
             {
-                if (overlay is TextOverlayRegion textOv)
+                PageData pageData = new PageData
                 {
-                    project.Overlays.Add(new TextOverlayData
-                    {
-                        Label = textOv.Label,
-                        X = textOv.X / ImageDisplayWidth,
-                        Y = textOv.Y / ImageDisplayHeight,
-                        Width = textOv.Width / ImageDisplayWidth,
-                        Height = textOv.Height / ImageDisplayHeight,
-                        Text = textOv.Text,
-                        FontName = textOv.SelectedFont?.DisplayName ?? "",
-                        FontSize = textOv.FontSize,
-                        FontColor = textOv.FontColor,
-                        Alignment = textOv.Alignment,
-                    });
-                }
-                else if (overlay is ImageOverlayRegion imgOv)
+                    Title = page.Title,
+                    PageNumber = page.PageNumber,
+                };
+
+                foreach (OverlayRegion overlay in page.Overlays)
                 {
-                    project.Overlays.Add(new ImageOverlayData
+                    if (overlay is TextOverlayRegion textOv)
                     {
-                        Label = imgOv.Label,
-                        X = imgOv.X / ImageDisplayWidth,
-                        Y = imgOv.Y / ImageDisplayHeight,
-                        Width = imgOv.Width / ImageDisplayWidth,
-                        Height = imgOv.Height / ImageDisplayHeight,
-                        ImagePath = MakeRelativePath(projectDir, imgOv.ImagePath),
-                        Opacity = imgOv.Opacity,
-                    });
+                        pageData.Overlays.Add(new TextOverlayData
+                        {
+                            Label = textOv.Label,
+                            X = textOv.X / ImageDisplayWidth,
+                            Y = textOv.Y / ImageDisplayHeight,
+                            Width = textOv.Width / ImageDisplayWidth,
+                            Height = textOv.Height / ImageDisplayHeight,
+                            Text = textOv.Text,
+                            FontName = textOv.SelectedFont?.DisplayName ?? "",
+                            FontSize = textOv.FontSize,
+                            FontColor = textOv.FontColor,
+                            Alignment = textOv.Alignment,
+                        });
+                    }
+                    else if (overlay is ImageOverlayRegion imgOv)
+                    {
+                        pageData.Overlays.Add(new ImageOverlayData
+                        {
+                            Label = imgOv.Label,
+                            X = imgOv.X / ImageDisplayWidth,
+                            Y = imgOv.Y / ImageDisplayHeight,
+                            Width = imgOv.Width / ImageDisplayWidth,
+                            Height = imgOv.Height / ImageDisplayHeight,
+                            ImagePath = MakeRelativePath(projectDir, imgOv.ImagePath),
+                            Opacity = imgOv.Opacity,
+                        });
+                    }
                 }
+
+                project.Pages.Add(pageData);
             }
 
-            var json = JsonSerializer.Serialize(project, new JsonSerializerOptions { WriteIndented = true });
+            string json = JsonSerializer.Serialize(project, new JsonSerializerOptions { WriteIndented = true });
             await File.WriteAllTextAsync(projectPath, json);
-            StatusMessage = $"Project saved: {Path.GetFileName(projectPath)}";
+            StatusMessage = $"Project saved: {Path.GetFileName(projectPath)} ({Pages.Count} page(s))";
         }
         catch (Exception ex)
         {
@@ -345,10 +564,10 @@ public partial class MainWindowViewModel : ViewModelBase
     [RelayCommand]
     private async Task OpenProjectAsync()
     {
-        var topLevel = App.TopLevel;
+        TopLevel? topLevel = App.TopLevel;
         if (topLevel == null) return;
 
-        var files = await topLevel.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        IReadOnlyList<IStorageFile> files = await topLevel.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
             Title = "Open Project",
             AllowMultiple = false,
@@ -362,10 +581,10 @@ public partial class MainWindowViewModel : ViewModelBase
 
         try
         {
-            var projectPath = files[0].Path.LocalPath;
-            var projectDir = Path.GetDirectoryName(projectPath) ?? ".";
-            var json = await File.ReadAllTextAsync(projectPath);
-            var project = JsonSerializer.Deserialize<ProjectData>(json);
+            string projectPath = files[0].Path.LocalPath;
+            string projectDir = Path.GetDirectoryName(projectPath) ?? ".";
+            string json = await File.ReadAllTextAsync(projectPath);
+            ProjectData? project = JsonSerializer.Deserialize<ProjectData>(json);
 
             if (project == null)
             {
@@ -373,20 +592,30 @@ public partial class MainWindowViewModel : ViewModelBase
                 return;
             }
 
-            // Resolve paths
-            var imgPath = ResolveRelativePath(projectDir, project.ImagePath);
+            // Migrate v1 projects: flat overlays → single page
+            if (project.Pages.Count == 0 && project.Overlays is { Count: > 0 })
+            {
+                PageData page = new PageData { Title = "Page 1" };
+                page.Overlays.AddRange(project.Overlays);
+                project.Pages.Add(page);
+            }
+
+            // Ensure at least one page
+            if (project.Pages.Count == 0)
+                project.Pages.Add(new PageData { Title = "Page 1" });
+
+            string imgPath = ResolveRelativePath(projectDir, project.ImagePath);
             if (!File.Exists(imgPath))
             {
                 StatusMessage = $"Image not found: {imgPath}";
                 return;
             }
 
-            // Load the background image (this clears overlays)
+            // Load background image (clears overlays and pages)
             LoadImageFromPath(imgPath);
             OutputPath = ResolveRelativePath(projectDir, project.OutputPath);
 
-            // Need display dimensions to be set before restoring overlays.
-            // Signal the view to layout, then restore overlays.
+            // Signal to load all pages after layout
             _pendingProject = (project, projectDir);
             RequestLayoutThenRestore?.Invoke();
         }
@@ -398,9 +627,6 @@ public partial class MainWindowViewModel : ViewModelBase
 
     private (ProjectData project, string projectDir)? _pendingProject;
 
-    /// <summary>
-    /// Raised when the view should perform layout and then call RestorePendingOverlays.
-    /// </summary>
     public event Action? RequestLayoutThenRestore;
 
     public void RestorePendingOverlays()
@@ -408,54 +634,81 @@ public partial class MainWindowViewModel : ViewModelBase
         if (_pendingProject is not { } pending) return;
         _pendingProject = null;
 
-        var (project, projectDir) = pending;
+        (ProjectData? project, string? projectDir) = pending;
 
-        foreach (var data in project.Overlays)
+        // Clear the default page created by LoadImageFromPath
+        Pages.Clear();
+        Overlays.Clear();
+
+        foreach (PageData pageData in project.Pages)
         {
-            if (data is TextOverlayData textData)
+            BookPage bookPage = new BookPage
             {
-                _textCount++;
-                var overlay = new TextOverlayRegion
-                {
-                    Label = string.IsNullOrEmpty(textData.Label) ? $"Text {_textCount}" : textData.Label,
-                    X = textData.X * ImageDisplayWidth,
-                    Y = textData.Y * ImageDisplayHeight,
-                    Width = textData.Width * ImageDisplayWidth,
-                    Height = textData.Height * ImageDisplayHeight,
-                    Text = textData.Text,
-                    FontSize = textData.FontSize,
-                    FontColor = textData.FontColor,
-                    Alignment = textData.Alignment,
-                    SelectedFont = AvailableFonts.FirstOrDefault(f => f.DisplayName == textData.FontName)
-                                   ?? (AvailableFonts.Count > 0 ? AvailableFonts[0] : null),
-                };
-                Overlays.Add(overlay);
-            }
-            else if (data is ImageOverlayData imgData)
+                Title = pageData.Title,
+                PageNumber = pageData.PageNumber,
+            };
+
+            foreach (OverlayData data in pageData.Overlays)
             {
-                _imageCount++;
-                var imgPath = ResolveRelativePath(projectDir, imgData.ImagePath);
-                var overlay = new ImageOverlayRegion
+                if (data is TextOverlayData textData)
                 {
-                    Label = string.IsNullOrEmpty(imgData.Label) ? $"Image {_imageCount}" : imgData.Label,
-                    X = imgData.X * ImageDisplayWidth,
-                    Y = imgData.Y * ImageDisplayHeight,
-                    Width = imgData.Width * ImageDisplayWidth,
-                    Height = imgData.Height * ImageDisplayHeight,
-                    Opacity = imgData.Opacity,
-                };
+                    bookPage.TextCount++;
+                    TextOverlayRegion overlay = new TextOverlayRegion
+                    {
+                        Label = string.IsNullOrEmpty(textData.Label) ? $"Text {bookPage.TextCount}" : textData.Label,
+                        X = textData.X * ImageDisplayWidth,
+                        Y = textData.Y * ImageDisplayHeight,
+                        Width = textData.Width * ImageDisplayWidth,
+                        Height = textData.Height * ImageDisplayHeight,
+                        Text = textData.Text,
+                        FontSize = textData.FontSize,
+                        FontColor = textData.FontColor,
+                        Alignment = textData.Alignment,
+                        SelectedFont = AvailableFonts.FirstOrDefault(f => f.DisplayName == textData.FontName)
+                                       ?? (AvailableFonts.Count > 0 ? AvailableFonts[0] : null),
+                    };
+                    bookPage.Overlays.Add(overlay);
+                }
+                else if (data is ImageOverlayData imgData)
+                {
+                    bookPage.ImageCount++;
+                    string imgPath = ResolveRelativePath(projectDir, imgData.ImagePath);
+                    ImageOverlayRegion overlay = new ImageOverlayRegion
+                    {
+                        Label = string.IsNullOrEmpty(imgData.Label) ? $"Image {bookPage.ImageCount}" : imgData.Label,
+                        X = imgData.X * ImageDisplayWidth,
+                        Y = imgData.Y * ImageDisplayHeight,
+                        Width = imgData.Width * ImageDisplayWidth,
+                        Height = imgData.Height * ImageDisplayHeight,
+                        Opacity = imgData.Opacity,
+                    };
 
-                if (File.Exists(imgPath))
-                    overlay.LoadImage(imgPath);
+                    if (File.Exists(imgPath))
+                        overlay.LoadImage(imgPath);
 
-                Overlays.Add(overlay);
+                    bookPage.Overlays.Add(overlay);
+                }
             }
+
+            Pages.Add(bookPage);
         }
 
-        if (Overlays.Count > 0)
-            SelectedOverlay = Overlays[0];
+        // Switch to the first page
+        if (Pages.Count > 0)
+        {
+            CurrentPageIndex = 0;
+            CurrentPage = Pages[0];
+            LoadPageOverlays(Pages[0]);
+        }
 
-        StatusMessage = $"Project loaded with {Overlays.Count} overlay(s).";
+        OnPropertyChanged(nameof(CurrentPageTitle));
+        OnPropertyChanged(nameof(CurrentPageNumber));
+        OnPropertyChanged(nameof(PageNavigationText));
+        OnPropertyChanged(nameof(HasPages));
+        OnPropertyChanged(nameof(CanGoPreviousPage));
+        OnPropertyChanged(nameof(CanGoNextPage));
+
+        StatusMessage = $"Project loaded with {Pages.Count} page(s), {Pages.Sum(p => p.Overlays.Count)} overlay(s) total.";
     }
 
     private static string MakeRelativePath(string basePath, string targetPath)
@@ -463,8 +716,8 @@ public partial class MainWindowViewModel : ViewModelBase
         if (string.IsNullOrEmpty(targetPath)) return string.Empty;
         try
         {
-            var baseUri = new Uri(basePath.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar);
-            var targetUri = new Uri(targetPath);
+            Uri baseUri = new Uri(basePath.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar);
+            Uri targetUri = new Uri(targetPath);
             return Uri.UnescapeDataString(baseUri.MakeRelativeUri(targetUri).ToString())
                        .Replace('/', Path.DirectorySeparatorChar);
         }
@@ -485,84 +738,98 @@ public partial class MainWindowViewModel : ViewModelBase
     private void Generate()
     {
         if (!IsImageLoaded) { StatusMessage = "No image loaded."; return; }
-        if (Overlays.Count == 0) { StatusMessage = "Add at least one overlay."; return; }
-        if (string.IsNullOrWhiteSpace(OutputPath)) { StatusMessage = "Specify an output path."; return; }
+        if (Pages.Count == 0) { StatusMessage = "No pages to export."; return; }
+        if (string.IsNullOrWhiteSpace(OutputPath)) { StatusMessage = "Specify an output folder."; return; }
+
+        // Ensure current page overlays are saved
+        SaveCurrentPageOverlays();
 
         try
         {
             double scaleX = OriginalImageWidth / ImageDisplayWidth;
             double scaleY = OriginalImageHeight / ImageDisplayHeight;
 
-            using var image = new MagickImage(ImagePath);
+            if (!Directory.Exists(OutputPath))
+                Directory.CreateDirectory(OutputPath);
 
-            foreach (var overlay in Overlays)
+            string ext = Path.GetExtension(ImagePath);
+            if (string.IsNullOrEmpty(ext)) ext = ".png";
+
+            int imageNumber = 1;
+            foreach (BookPage page in Pages)
             {
-                if (overlay.Width < 1 || overlay.Height < 1) continue;
+                using MagickImage image = new MagickImage(ImagePath);
 
-                int actualX = (int)(overlay.X * scaleX);
-                int actualY = (int)(overlay.Y * scaleY);
-                int actualWidth = (int)(overlay.Width * scaleX);
-                int actualHeight = (int)(overlay.Height * scaleY);
-
-                if (overlay is TextOverlayRegion textOverlay)
+                foreach (OverlayRegion overlay in page.Overlays)
                 {
-                    if (string.IsNullOrWhiteSpace(textOverlay.Text)) continue;
+                    if (overlay.Width < 1 || overlay.Height < 1) continue;
 
-                    string fontPath = textOverlay.SelectedFont != null
-                        ? GetFontFilePath(textOverlay.SelectedFont)
-                        : "DejaVu-Sans";
+                    int actualX = (int)(overlay.X * scaleX);
+                    int actualY = (int)(overlay.Y * scaleY);
+                    int actualWidth = (int)(overlay.Width * scaleX);
+                    int actualHeight = (int)(overlay.Height * scaleY);
 
-                    var settings = new MagickReadSettings
+                    if (overlay is TextOverlayRegion textOverlay)
                     {
-                        Font = fontPath,
-                        FontPointsize = textOverlay.FontSize * Math.Max(scaleX, scaleY),
-                        FillColor = new MagickColor(textOverlay.FontColor),
-                        BackgroundColor = MagickColors.Transparent,
-                        Width = (uint)actualWidth,
-                        Height = (uint)actualHeight,
-                        TextGravity = textOverlay.Alignment switch
+                        if (string.IsNullOrWhiteSpace(textOverlay.Text)) continue;
+
+                        string fontPath = textOverlay.SelectedFont != null
+                            ? GetFontFilePath(textOverlay.SelectedFont)
+                            : "DejaVu-Sans";
+
+                        MagickReadSettings settings = new MagickReadSettings
                         {
-                            "Center" => Gravity.North,
-                            "Right" => Gravity.Northeast,
-                            _ => Gravity.Northwest
-                        }
-                    };
+                            Font = fontPath,
+                            FontPointsize = textOverlay.FontSize * Math.Max(scaleX, scaleY),
+                            FillColor = new MagickColor(textOverlay.FontColor),
+                            BackgroundColor = MagickColors.Transparent,
+                            Width = (uint)actualWidth,
+                            Height = (uint)actualHeight,
+                            TextGravity = textOverlay.Alignment switch
+                            {
+                                "Center" => Gravity.North,
+                                "Right" => Gravity.Northeast,
+                                _ => Gravity.Northwest
+                            }
+                        };
 
-                    using var textImage = new MagickImage($"caption:{textOverlay.Text}", settings);
-                    image.Composite(textImage, actualX, actualY, CompositeOperator.Over);
-                }
-                else if (overlay is ImageOverlayRegion imgOverlay)
-                {
-                    if (string.IsNullOrWhiteSpace(imgOverlay.ImagePath) || !File.Exists(imgOverlay.ImagePath))
-                        continue;
-
-                    using var overlayImg = new MagickImage(imgOverlay.ImagePath);
-                    var geometry = new MagickGeometry((uint)actualWidth, (uint)actualHeight)
-                    {
-                        IgnoreAspectRatio = true
-                    };
-                    overlayImg.Resize(geometry);
-
-                    if (imgOverlay.Opacity < 100)
-                    {
-                        overlayImg.Alpha(AlphaOption.Set);
-                        overlayImg.Evaluate(Channels.Alpha, EvaluateOperator.Multiply, imgOverlay.Opacity / 100.0);
+                        using MagickImage textImage = new MagickImage($"caption:{textOverlay.Text}", settings);
+                        image.Composite(textImage, actualX, actualY, CompositeOperator.Over);
                     }
+                    else if (overlay is ImageOverlayRegion imgOverlay)
+                    {
+                        if (string.IsNullOrWhiteSpace(imgOverlay.ImagePath) || !File.Exists(imgOverlay.ImagePath))
+                            continue;
 
-                    image.Composite(overlayImg, actualX, actualY, CompositeOperator.Over);
+                        using MagickImage overlayImg = new MagickImage(imgOverlay.ImagePath);
+                        MagickGeometry geometry = new MagickGeometry((uint)actualWidth, (uint)actualHeight)
+                        {
+                            IgnoreAspectRatio = true
+                        };
+                        overlayImg.Resize(geometry);
+
+                        if (imgOverlay.Opacity < 100)
+                        {
+                            overlayImg.Alpha(AlphaOption.Set);
+                            overlayImg.Evaluate(Channels.Alpha, EvaluateOperator.Multiply, imgOverlay.Opacity / 100.0);
+                        }
+
+                        image.Composite(overlayImg, actualX, actualY, CompositeOperator.Over);
+                    }
                 }
+
+                // Sanitize title for filename
+                string safeTitle = string.Join("_", page.Title.Split(Path.GetInvalidFileNameChars()));
+                string outputFile = Path.Combine(OutputPath, $"{imageNumber}_{safeTitle}{ext}");
+                image.Write(outputFile);
+                imageNumber++;
             }
 
-            var dir = Path.GetDirectoryName(OutputPath);
-            if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
-                Directory.CreateDirectory(dir);
-
-            image.Write(OutputPath);
-            StatusMessage = $"Saved to: {OutputPath}";
+            StatusMessage = $"Exported {Pages.Count} page(s) to: {OutputPath}";
         }
         catch (Exception ex)
         {
-            StatusMessage = $"Error generating image: {ex.Message}";
+            StatusMessage = $"Error generating images: {ex.Message}";
         }
     }
 }

@@ -30,6 +30,11 @@ public partial class MainWindow : Window
     private double _origX, _origY, _origW, _origH;
     private ResizeEdge _resizeEdge;
 
+    // Flag to suppress page selection changed during programmatic updates
+    private bool _suppressPageSelection;
+    // Tracks which page index is currently rendered on the canvas
+    private int _renderedPageIndex;
+
     [Flags]
     private enum ResizeEdge
     {
@@ -73,11 +78,24 @@ public partial class MainWindow : Window
             };
             ViewModel.RequestLayoutThenRestore += () =>
             {
+                _suppressPageSelection = true;
                 ClearAllOverlayVisuals();
                 Avalonia.Threading.Dispatcher.UIThread.Post(() =>
                 {
                     UpdateImageLayout();
                     ViewModel.RestorePendingOverlays();
+                    _renderedPageIndex = ViewModel.CurrentPageIndex;
+                    _suppressPageSelection = false;
+                    RefreshAllOverlayVisuals();
+                }, Avalonia.Threading.DispatcherPriority.Loaded);
+            };
+            ViewModel.RequestClearVisuals += () =>
+            {
+                ClearAllOverlayVisuals();
+                _renderedPageIndex = ViewModel.CurrentPageIndex;
+                // Post a refresh after the VM finishes loading the new page overlays
+                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                {
                     RefreshAllOverlayVisuals();
                 }, Avalonia.Threading.DispatcherPriority.Loaded);
             };
@@ -98,11 +116,11 @@ public partial class MainWindow : Window
         if (_canvas == null || _displayImage == null || ViewModel?.ImageSource == null)
             return;
 
-        var canvasBounds = _canvas.Bounds;
+        Rect canvasBounds = _canvas.Bounds;
         if (canvasBounds.Width <= 0 || canvasBounds.Height <= 0) return;
 
-        var imgWidth = ViewModel.OriginalImageWidth;
-        var imgHeight = ViewModel.OriginalImageHeight;
+        int imgWidth = ViewModel.OriginalImageWidth;
+        int imgHeight = ViewModel.OriginalImageHeight;
         if (imgWidth <= 0 || imgHeight <= 0) return;
 
         double scale = Math.Min(canvasBounds.Width / imgWidth, canvasBounds.Height / imgHeight);
@@ -115,8 +133,52 @@ public partial class MainWindow : Window
         Canvas.SetLeft(_displayImage, (canvasBounds.Width - displayWidth) / 2);
         Canvas.SetTop(_displayImage, (canvasBounds.Height - displayHeight) / 2);
 
+        double oldW = ViewModel.ImageDisplayWidth;
+        double oldH = ViewModel.ImageDisplayHeight;
+
         ViewModel.ImageDisplayWidth = displayWidth;
         ViewModel.ImageDisplayHeight = displayHeight;
+
+        // Rescale all overlay positions proportionally when display size changes
+        if (oldW > 0 && oldH > 0
+            && (Math.Abs(oldW - displayWidth) > 0.5 || Math.Abs(oldH - displayHeight) > 0.5))
+        {
+            double ratioX = displayWidth / oldW;
+            double ratioY = displayHeight / oldH;
+            RescaleAllOverlays(ratioX, ratioY);
+        }
+    }
+
+    /// <summary>
+    /// Rescale overlay positions/sizes across all pages when the display dimensions change.
+    /// Uses a HashSet to avoid double-scaling overlays shared between VM.Overlays and BookPage.Overlays.
+    /// </summary>
+    private void RescaleAllOverlays(double ratioX, double ratioY)
+    {
+        if (ViewModel == null) return;
+
+        HashSet<OverlayRegion> rescaled = new HashSet<OverlayRegion>();
+
+        // Rescale overlays stored in each page
+        foreach (BookPage page in ViewModel.Pages)
+            foreach (OverlayRegion overlay in page.Overlays)
+                if (rescaled.Add(overlay))
+                {
+                    overlay.X *= ratioX;
+                    overlay.Y *= ratioY;
+                    overlay.Width *= ratioX;
+                    overlay.Height *= ratioY;
+                }
+
+        // Rescale any active overlays not yet saved to a page
+        foreach (OverlayRegion overlay in ViewModel.Overlays)
+            if (rescaled.Add(overlay))
+            {
+                overlay.X *= ratioX;
+                overlay.Y *= ratioY;
+                overlay.Width *= ratioX;
+                overlay.Height *= ratioY;
+            }
     }
 
     private (double offsetX, double offsetY) GetImageOffset()
@@ -130,7 +192,7 @@ public partial class MainWindow : Window
     /// <summary>Clamp a canvas point to the image display bounds.</summary>
     private Point ClampToImage(Point p)
     {
-        var (ox, oy) = GetImageOffset();
+        (double ox, double oy) = GetImageOffset();
         double w = ViewModel?.ImageDisplayWidth ?? 0;
         double h = ViewModel?.ImageDisplayHeight ?? 0;
         return new Point(Math.Clamp(p.X, ox, ox + w), Math.Clamp(p.Y, oy, oy + h));
@@ -142,7 +204,7 @@ public partial class MainWindow : Window
 
     private async void OnLoadImageClick(object? sender, RoutedEventArgs e)
     {
-        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        IReadOnlyList<IStorageFile> files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
             Title = "Open Image",
             AllowMultiple = false,
@@ -158,6 +220,7 @@ public partial class MainWindow : Window
         {
             ClearAllOverlayVisuals();
             ViewModel?.LoadImageFromPath(files[0].Path.LocalPath);
+            _renderedPageIndex = 0;
             Avalonia.Threading.Dispatcher.UIThread.Post(UpdateImageLayout,
                 Avalonia.Threading.DispatcherPriority.Loaded);
         }
@@ -167,7 +230,7 @@ public partial class MainWindow : Window
     {
         if (ViewModel?.SelectedImageOverlay is not { } imgOverlay) return;
 
-        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        IReadOnlyList<IStorageFile> files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
             Title = "Select Overlay Image",
             AllowMultiple = false,
@@ -191,6 +254,50 @@ public partial class MainWindow : Window
             overlay.FontColor = color;
     }
 
+    private async void OnAddPageClick(object? sender, RoutedEventArgs e)
+    {
+        if (ViewModel == null) return;
+
+        AddPageDialog dialog = new AddPageDialog();
+        AddPageResult? result = await dialog.ShowDialog<AddPageResult?>(this);
+
+        if (result != null)
+        {
+            _suppressPageSelection = true;
+            ClearAllOverlayVisuals();
+            ViewModel.AddPageCommand.Execute(null);
+            _renderedPageIndex = ViewModel.CurrentPageIndex;
+            _suppressPageSelection = false;
+
+            // Apply the user-provided title and page number
+            if (ViewModel.CurrentPage != null)
+            {
+                ViewModel.CurrentPageTitle = result.Title;
+                ViewModel.CurrentPageNumber = result.PageNumber;
+            }
+        }
+    }
+
+    private void OnPageSelectionChanged(object? sender, SelectionChangedEventArgs e)
+    {
+        if (_suppressPageSelection || ViewModel == null) return;
+        if (sender is ListBox lb && lb.SelectedIndex >= 0 && lb.SelectedIndex != _renderedPageIndex)
+        {
+            int targetIndex = lb.SelectedIndex;
+            _suppressPageSelection = true;
+            ClearAllOverlayVisuals();
+            ViewModel.SwitchToPage(targetIndex);
+            _renderedPageIndex = targetIndex;
+            _suppressPageSelection = false;
+
+            // Post a refresh after layout so visuals are drawn onto the canvas
+            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            {
+                RefreshAllOverlayVisuals();
+            }, Avalonia.Threading.DispatcherPriority.Loaded);
+        }
+    }
+
     #endregion
 
     #region Pointer interaction (draw / move / resize)
@@ -199,8 +306,8 @@ public partial class MainWindow : Window
     {
         if (ViewModel == null || !ViewModel.IsImageLoaded || _canvas == null) return;
 
-        var pos = e.GetPosition(_canvas);
-        var (ox, oy) = GetImageOffset();
+        Point pos = e.GetPosition(_canvas);
+        (double ox, double oy) = GetImageOffset();
         double relX = pos.X - ox;
         double relY = pos.Y - oy;
 
@@ -226,7 +333,7 @@ public partial class MainWindow : Window
         // ── Check resize handles on the selected overlay first ──
         if (ViewModel.SelectedOverlay is { } sel)
         {
-            var edge = HitTestResize(sel, relX, relY);
+            ResizeEdge edge = HitTestResize(sel, relX, relY);
             if (edge != ResizeEdge.None)
             {
                 _interaction = InteractionMode.Resizing;
@@ -242,7 +349,7 @@ public partial class MainWindow : Window
         // ── Hit-test overlays for move or selection ──
         for (int i = ViewModel.Overlays.Count - 1; i >= 0; i--)
         {
-            var ov = ViewModel.Overlays[i];
+            OverlayRegion ov = ViewModel.Overlays[i];
             if (relX >= ov.X && relX <= ov.X + ov.Width &&
                 relY >= ov.Y && relY <= ov.Y + ov.Height)
             {
@@ -264,7 +371,7 @@ public partial class MainWindow : Window
     {
         if (_canvas == null || ViewModel == null) return;
 
-        var pos = e.GetPosition(_canvas);
+        Point pos = e.GetPosition(_canvas);
 
         // Update cursor based on hover
         if (_interaction == InteractionMode.None && !ViewModel.IsDrawingMode)
@@ -288,7 +395,7 @@ public partial class MainWindow : Window
         }
         else if (_interaction == InteractionMode.Moving && ViewModel.SelectedOverlay is { } mov)
         {
-            var (ox, oy) = GetImageOffset();
+            (double ox, double oy) = GetImageOffset();
             double dx = pos.X - _dragStart.X;
             double dy = pos.Y - _dragStart.Y;
 
@@ -343,7 +450,7 @@ public partial class MainWindow : Window
             if (_selectionBox != null)
                 _selectionBox.IsVisible = false;
 
-            var (ox, oy) = GetImageOffset();
+            (double ox, double oy) = GetImageOffset();
             double left = Canvas.GetLeft(_selectionBox!);
             double top = Canvas.GetTop(_selectionBox!);
             double w = _selectionBox!.Width;
@@ -372,7 +479,7 @@ public partial class MainWindow : Window
         bool nearT = Math.Abs(relY - t) <= ResizeHandleSize && relX >= l - ResizeHandleSize && relX <= r + ResizeHandleSize;
         bool nearB = Math.Abs(relY - b) <= ResizeHandleSize && relX >= l - ResizeHandleSize && relX <= r + ResizeHandleSize;
 
-        var edge = ResizeEdge.None;
+        ResizeEdge edge = ResizeEdge.None;
         if (nearL) edge |= ResizeEdge.Left;
         if (nearR) edge |= ResizeEdge.Right;
         if (nearT) edge |= ResizeEdge.Top;
@@ -384,8 +491,8 @@ public partial class MainWindow : Window
     {
         if (ViewModel?.SelectedOverlay == null) { Cursor = Cursor.Default; return; }
 
-        var (ox, oy) = GetImageOffset();
-        var edge = HitTestResize(ViewModel.SelectedOverlay, canvasPos.X - ox, canvasPos.Y - oy);
+        (double ox, double oy) = GetImageOffset();
+        ResizeEdge edge = HitTestResize(ViewModel.SelectedOverlay, canvasPos.X - ox, canvasPos.Y - oy);
 
         Cursor = edge switch
         {
@@ -415,8 +522,8 @@ public partial class MainWindow : Window
         if (_canvas == null || ViewModel == null) return;
 
         // Remove stale visuals
-        var toRemove = new List<OverlayRegion>();
-        foreach (var kv in _overlayVisuals)
+        List<OverlayRegion> toRemove = new List<OverlayRegion>();
+        foreach (KeyValuePair<OverlayRegion, OverlayVisual> kv in _overlayVisuals)
         {
             if (!ViewModel.Overlays.Contains(kv.Key))
             {
@@ -425,14 +532,14 @@ public partial class MainWindow : Window
                 toRemove.Add(kv.Key);
             }
         }
-        foreach (var key in toRemove)
+        foreach (OverlayRegion key in toRemove)
             _overlayVisuals.Remove(key);
 
-        var (offsetX, offsetY) = GetImageOffset();
+        (double offsetX, double offsetY) = GetImageOffset();
 
-        foreach (var overlay in ViewModel.Overlays)
+        foreach (OverlayRegion overlay in ViewModel.Overlays)
         {
-            if (!_overlayVisuals.TryGetValue(overlay, out var visual))
+            if (!_overlayVisuals.TryGetValue(overlay, out OverlayVisual? visual))
             {
                 visual = CreateVisualForOverlay(overlay);
                 _overlayVisuals[overlay] = visual;
@@ -464,13 +571,10 @@ public partial class MainWindow : Window
                 tb.Padding = new Thickness(3, 2);
                 tb.Text = textOv.Text;
 
-                // Match the Generate scaling: Generate uses fontSize * Max(scaleX, scaleY)
-                // where scale = Original / Display. Preview needs the inverse.
-                double displayScale = (ViewModel.OriginalImageWidth > 0 && ViewModel.ImageDisplayWidth > 0)
-                    ? Math.Min(ViewModel.ImageDisplayWidth / ViewModel.OriginalImageWidth,
-                               ViewModel.ImageDisplayHeight / ViewModel.OriginalImageHeight)
-                    : 1.0;
-                tb.FontSize = Math.Max(6, textOv.FontSize * displayScale);
+                // WYSIWYG: render at the user's chosen font size in display pixels.
+                // The export scales this up by (Original / Display) to maintain the
+                // same proportional text size in the full-resolution output.
+                tb.FontSize = Math.Max(6, textOv.FontSize);
 
                 try { tb.Foreground = new SolidColorBrush(Color.Parse(textOv.FontColor)); }
                 catch { tb.Foreground = Brushes.Black; }
@@ -502,7 +606,7 @@ public partial class MainWindow : Window
 
     private OverlayVisual CreateVisualForOverlay(OverlayRegion overlay)
     {
-        var box = new Border
+        Border box = new Border
         {
             BorderThickness = new Thickness(2),
             IsHitTestVisible = false
@@ -540,15 +644,15 @@ public partial class MainWindow : Window
         if (_canvas == null || ViewModel?.SelectedOverlay == null) return;
 
         // Remove old handles
-        foreach (var h in _resizeHandles.Values)
+        foreach (Border h in _resizeHandles.Values)
             _canvas.Children.Remove(h);
         _resizeHandles.Clear();
 
-        var sel = ViewModel.SelectedOverlay;
-        var (ox, oy) = GetImageOffset();
+        OverlayRegion? sel = ViewModel.SelectedOverlay;
+        (double ox, double oy) = GetImageOffset();
         double hs = ResizeHandleSize;
 
-        var positions = new (string name, double cx, double cy)[]
+        (string name, double cx, double cy)[] positions = new (string name, double cx, double cy)[]
         {
             ("TL", sel.X, sel.Y),
             ("T",  sel.X + sel.Width / 2, sel.Y),
@@ -560,9 +664,9 @@ public partial class MainWindow : Window
             ("BR", sel.X + sel.Width, sel.Y + sel.Height),
         };
 
-        foreach (var (name, cx, cy) in positions)
+        foreach ((string name, double cx, double cy) in positions)
         {
-            var handle = new Border
+            Border handle = new Border
             {
                 Width = hs,
                 Height = hs,
@@ -581,7 +685,7 @@ public partial class MainWindow : Window
     private void ClearResizeHandles()
     {
         if (_canvas == null) return;
-        foreach (var h in _resizeHandles.Values)
+        foreach (Border h in _resizeHandles.Values)
             _canvas.Children.Remove(h);
         _resizeHandles.Clear();
     }
@@ -589,7 +693,7 @@ public partial class MainWindow : Window
     private void ClearAllOverlayVisuals()
     {
         if (_canvas == null) return;
-        foreach (var kv in _overlayVisuals)
+        foreach (KeyValuePair<OverlayRegion, OverlayVisual> kv in _overlayVisuals)
         {
             _canvas.Children.Remove(kv.Value.Box);
             _canvas.Children.Remove(kv.Value.Content);

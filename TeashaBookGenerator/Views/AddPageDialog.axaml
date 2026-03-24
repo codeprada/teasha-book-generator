@@ -1,0 +1,43 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="TeashaBookGenerator.Views.AddPageDialog"
+        Title="Add New Page"
+        Width="380"
+        CanResize="False"
+        WindowStartupLocation="CenterOwner"
+        SizeToContent="Height"
+        Background="{StaticResource LayerFillAltBrush}">
+
+    <StackPanel Margin="24" Spacing="16">
+        <TextBlock Text="Add New Page"
+                   FontSize="20" FontWeight="SemiBold"
+                   Foreground="{StaticResource TextPrimaryBrush}"/>
+
+        <StackPanel Spacing="4">
+            <TextBlock Text="Page Title" FontSize="12" FontWeight="SemiBold"
+                       Foreground="{StaticResource TextSecondaryBrush}"/>
+            <TextBox Name="TitleBox" Watermark="Enter page title..." Text=""
+                     CornerRadius="6" Padding="10,8" FontSize="13"/>
+        </StackPanel>
+
+        <StackPanel Spacing="4">
+            <TextBlock Text="Page Number (optional)" FontSize="12" FontWeight="SemiBold"
+                       Foreground="{StaticResource TextSecondaryBrush}"/>
+            <TextBox Name="PageNumberBox" Watermark="e.g. 1, iv, A..."
+                     CornerRadius="6" Padding="10,8" FontSize="13"/>
+        </StackPanel>
+
+        <Grid ColumnDefinitions="*,8,*" Margin="0,8,0,0">
+            <Button Grid.Column="0" Content="Cancel" Click="OnCancel"
+                    HorizontalAlignment="Stretch"
+                    HorizontalContentAlignment="Center"
+                    Classes="tb" Padding="0,10"/>
+            <Button Grid.Column="2" Click="OnAdd"
+                    HorizontalAlignment="Stretch"
+                    HorizontalContentAlignment="Center"
+                    Classes="accent" Padding="0,10">
+                <TextBlock Text="Add Page" Foreground="White" FontSize="13"/>
+            </Button>
+        </Grid>
+    </StackPanel>
+</Window>

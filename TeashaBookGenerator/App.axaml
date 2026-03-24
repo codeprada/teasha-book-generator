@@ -2,14 +2,55 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="TeashaBookGenerator.App"
              xmlns:local="using:TeashaBookGenerator"
-             RequestedThemeVariant="Default">
-             <!-- "Default" ThemeVariant follows system theme variant. "Dark" or "Light" are other available options. -->
+             RequestedThemeVariant="Light">
 
     <Application.DataTemplates>
         <local:ViewLocator/>
     </Application.DataTemplates>
 
     <Application.Resources>
+        <!-- WinUI3 palette -->
+        <Color x:Key="AccentColor">#005FB8</Color>
+        <Color x:Key="AccentLightColor">#0078D4</Color>
+        <Color x:Key="AccentHoverColor">#1A83D8</Color>
+        <Color x:Key="AccentSubtleColor">#D6E7F7</Color>
+        <Color x:Key="AccentSubtleHoverColor">#C4DAF0</Color>
+        <Color x:Key="LayerFillDefault">#FFFFFF</Color>
+        <Color x:Key="LayerFillAlt">#F9F9F9</Color>
+        <Color x:Key="SolidBackgroundBase">#F3F3F3</Color>
+        <Color x:Key="NavPaneBg">#F3F3F3</Color>
+        <Color x:Key="CardStroke">#E5E5E5</Color>
+        <Color x:Key="SubtleStroke">#EBEBEB</Color>
+        <Color x:Key="ControlFill">#FFFFFF</Color>
+        <Color x:Key="ControlFillHover">#F5F5F5</Color>
+        <Color x:Key="ControlStroke">#D6D6D6</Color>
+        <Color x:Key="TextPrimary">#1A1A1A</Color>
+        <Color x:Key="TextSecondary">#5D5D5D</Color>
+        <Color x:Key="TextTertiary">#9E9E9E</Color>
+        <Color x:Key="DangerColor">#C42B1C</Color>
+        <Color x:Key="DangerSubtleColor">#FDE7E4</Color>
+
+        <SolidColorBrush x:Key="AccentBrush" Color="{StaticResource AccentColor}"/>
+        <SolidColorBrush x:Key="AccentLightBrush" Color="{StaticResource AccentLightColor}"/>
+        <SolidColorBrush x:Key="AccentHoverBrush" Color="{StaticResource AccentHoverColor}"/>
+        <SolidColorBrush x:Key="AccentSubtleBrush" Color="{StaticResource AccentSubtleColor}"/>
+        <SolidColorBrush x:Key="AccentSubtleHoverBrush" Color="{StaticResource AccentSubtleHoverColor}"/>
+        <SolidColorBrush x:Key="LayerFillBrush" Color="{StaticResource LayerFillDefault}"/>
+        <SolidColorBrush x:Key="LayerFillAltBrush" Color="{StaticResource LayerFillAlt}"/>
+        <SolidColorBrush x:Key="SolidBackgroundBrush" Color="{StaticResource SolidBackgroundBase}"/>
+        <SolidColorBrush x:Key="NavPaneBrush" Color="{StaticResource NavPaneBg}"/>
+        <SolidColorBrush x:Key="CardStrokeBrush" Color="{StaticResource CardStroke}"/>
+        <SolidColorBrush x:Key="SubtleStrokeBrush" Color="{StaticResource SubtleStroke}"/>
+        <SolidColorBrush x:Key="ControlFillBrush" Color="{StaticResource ControlFill}"/>
+        <SolidColorBrush x:Key="ControlFillHoverBrush" Color="{StaticResource ControlFillHover}"/>
+        <SolidColorBrush x:Key="ControlStrokeBrush" Color="{StaticResource ControlStroke}"/>
+        <SolidColorBrush x:Key="TextPrimaryBrush" Color="{StaticResource TextPrimary}"/>
+        <SolidColorBrush x:Key="TextSecondaryBrush" Color="{StaticResource TextSecondary}"/>
+        <SolidColorBrush x:Key="TextTertiaryBrush" Color="{StaticResource TextTertiary}"/>
+        <SolidColorBrush x:Key="DangerBrush" Color="{StaticResource DangerColor}"/>
+        <SolidColorBrush x:Key="DangerSubtleBrush" Color="{StaticResource DangerSubtleColor}"/>
+
+        <!-- Fonts -->
         <FontFamily x:Key="OpenSansFont">avares://TeashaBookGenerator/Assets/Fonts/OpenSans-Regular.ttf#Open Sans</FontFamily>
         <FontFamily x:Key="RobotoFont">avares://TeashaBookGenerator/Assets/Fonts/Roboto-Regular.ttf#Roboto</FontFamily>
         <FontFamily x:Key="LatoFont">avares://TeashaBookGenerator/Assets/Fonts/Lato-Regular.ttf#Lato</FontFamily>
@@ -29,5 +70,94 @@
 
     <Application.Styles>
         <FluentTheme />
+
+        <!-- ════ Global button polish ════ -->
+        <!-- Standard toolbar/action button -->
+        <Style Selector="Button.tb">
+            <Setter Property="Background" Value="{StaticResource ControlFillBrush}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource ControlStrokeBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="6"/>
+            <Setter Property="Padding" Value="14,7"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+        </Style>
+        <Style Selector="Button.tb:pointerover">
+            <Setter Property="Background" Value="{StaticResource ControlFillHoverBrush}"/>
+        </Style>
+
+        <!-- Accent-filled button -->
+        <Style Selector="Button.accent">
+            <Setter Property="Background" Value="{StaticResource AccentBrush}"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="CornerRadius" Value="6"/>
+            <Setter Property="Padding" Value="14,7"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+        <Style Selector="Button.accent:pointerover">
+            <Setter Property="Background" Value="{StaticResource AccentHoverBrush}"/>
+        </Style>
+
+        <!-- Subtle (text-only / borderless) button -->
+        <Style Selector="Button.subtle">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="CornerRadius" Value="6"/>
+            <Setter Property="Padding" Value="14,7"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+        </Style>
+        <Style Selector="Button.subtle:pointerover">
+            <Setter Property="Background" Value="{StaticResource ControlFillHoverBrush}"/>
+        </Style>
+
+        <!-- Danger subtle button -->
+        <Style Selector="Button.danger">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderBrush" Value="{StaticResource DangerBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="6"/>
+            <Setter Property="Padding" Value="14,7"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Foreground" Value="{StaticResource DangerBrush}"/>
+        </Style>
+        <Style Selector="Button.danger:pointerover">
+            <Setter Property="Background" Value="{StaticResource DangerSubtleBrush}"/>
+        </Style>
+
+        <!-- Small icon-like button (nav arrows) -->
+        <Style Selector="Button.icon">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="CornerRadius" Value="6"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="MinWidth" Value="32"/>
+            <Setter Property="MinHeight" Value="32"/>
+            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="Button.icon:pointerover">
+            <Setter Property="Background" Value="{StaticResource ControlFillHoverBrush}"/>
+        </Style>
+
+        <!-- Color swatch button -->
+        <Style Selector="Button.swatch">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="CornerRadius" Value="6"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Width" Value="30"/>
+            <Setter Property="Height" Value="30"/>
+            <Setter Property="Margin" Value="2"/>
+        </Style>
+
+        <!-- ════ ListBox item rounded selection ════ -->
+        <Style Selector="ListBox.rounded ListBoxItem">
+            <Setter Property="CornerRadius" Value="6"/>
+            <Setter Property="Margin" Value="2,1"/>
+            <Setter Property="Padding" Value="0"/>
+        </Style>
     </Application.Styles>
 </Application>

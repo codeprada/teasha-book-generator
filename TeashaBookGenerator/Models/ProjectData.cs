@@ -6,13 +6,29 @@ namespace TeashaBookGenerator.Models;
 public class ProjectData
 {
     [JsonPropertyName("version")]
-    public int Version { get; set; } = 1;
+    public int Version { get; set; } = 2;
 
     [JsonPropertyName("imagePath")]
     public string ImagePath { get; set; } = string.Empty;
 
     [JsonPropertyName("outputPath")]
     public string OutputPath { get; set; } = string.Empty;
+
+    [JsonPropertyName("pages")]
+    public List<PageData> Pages { get; set; } = [];
+
+    /// <summary>Legacy field for v1 projects. Migrated to a single page on load.</summary>
+    [JsonPropertyName("overlays")]
+    public List<OverlayData>? Overlays { get; set; }
+}
+
+public class PageData
+{
+    [JsonPropertyName("title")]
+    public string Title { get; set; } = string.Empty;
+
+    [JsonPropertyName("pageNumber")]
+    public string PageNumber { get; set; } = string.Empty;
 
     [JsonPropertyName("overlays")]
     public List<OverlayData> Overlays { get; set; } = [];

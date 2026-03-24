@@ -25,7 +25,7 @@ public partial class App : Application
             // Avoid duplicate validations from both Avalonia and the CommunityToolkit. 
             // More info: https://docs.avaloniaui.net/docs/guides/development-guides/data-validation#manage-validationplugins
             DisableAvaloniaDataAnnotationValidation();
-            var mainWindow = new MainWindow
+            MainWindow mainWindow = new MainWindow
             {
                 DataContext = new MainWindowViewModel(),
             };
@@ -39,11 +39,11 @@ public partial class App : Application
     private void DisableAvaloniaDataAnnotationValidation()
     {
         // Get an array of plugins to remove
-        var dataValidationPluginsToRemove =
+        DataAnnotationsValidationPlugin[] dataValidationPluginsToRemove =
             BindingPlugins.DataValidators.OfType<DataAnnotationsValidationPlugin>().ToArray();
 
         // remove each entry found
-        foreach (var plugin in dataValidationPluginsToRemove)
+        foreach (DataAnnotationsValidationPlugin plugin in dataValidationPluginsToRemove)
         {
             BindingPlugins.DataValidators.Remove(plugin);
         }

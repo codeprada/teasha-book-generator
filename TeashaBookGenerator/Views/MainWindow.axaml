@@ -4,13 +4,14 @@
         xmlns:models="using:TeashaBookGenerator.Models"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        mc:Ignorable="d" d:DesignWidth="1200" d:DesignHeight="800"
+        mc:Ignorable="d" d:DesignWidth="1280" d:DesignHeight="800"
         x:Class="TeashaBookGenerator.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
         Icon="/Assets/avalonia-logo.ico"
-        Title="Teasha Book Generator - Text Overlay Tool"
-        MinWidth="900" MinHeight="600"
-        Width="1200" Height="800">
+        Title="Teasha Book Generator"
+        MinWidth="1000" MinHeight="640"
+        Width="1280" Height="800"
+        Background="{StaticResource SolidBackgroundBrush}">
 
     <Design.DataContext>
         <vm:MainWindowViewModel/>
@@ -18,46 +19,230 @@
 
     <Grid RowDefinitions="Auto,*,Auto">
 
-        <!-- Top Toolbar -->
-        <Border Grid.Row="0" Background="#f0f0f0" Padding="10" BorderBrush="#ccc" BorderThickness="0,0,0,1">
-            <StackPanel Orientation="Horizontal" Spacing="10">
-                <Button Content="Load Image" Click="OnLoadImageClick" VerticalAlignment="Center"/>
-                <Button Content="Open Project"
-                        Command="{Binding OpenProjectCommand}"
-                        VerticalAlignment="Center"/>
-                <Button Content="Save Project"
-                        Command="{Binding SaveProjectCommand}"
-                        VerticalAlignment="Center"
-                        IsEnabled="{Binding IsImageLoaded}"/>
-                <Border Width="1" Background="#ccc" Margin="4,2"/>
-                <Button Content="+ Text Region"
-                        Command="{Binding AddTextOverlayCommand}"
-                        VerticalAlignment="Center"
-                        IsEnabled="{Binding IsImageLoaded}"/>
-                <Button Content="+ Image Region"
-                        Command="{Binding AddImageOverlayCommand}"
-                        VerticalAlignment="Center"
-                        IsEnabled="{Binding IsImageLoaded}"/>
-                <Button Content="Remove Selected"
-                        Command="{Binding RemoveOverlayCommand}"
-                        VerticalAlignment="Center"
-                        IsEnabled="{Binding SelectedOverlay, Converter={x:Static ObjectConverters.IsNotNull}}"/>
-                <TextBlock Text="{Binding StatusMessage}" VerticalAlignment="Center" Margin="10,0,0,0"
-                           Foreground="#555" FontSize="13"/>
-            </StackPanel>
+        <!-- ═══════════════════ TOP COMMAND BAR ═══════════════════ -->
+        <Border Grid.Row="0"
+                Background="{StaticResource LayerFillBrush}"
+                BorderBrush="{StaticResource SubtleStrokeBrush}"
+                BorderThickness="0,0,0,1"
+                Padding="12,6">
+            <Grid ColumnDefinitions="Auto,*,Auto">
+                <!-- Left: File actions -->
+                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="4">
+                    <Button Content="Load Image" Click="OnLoadImageClick" Classes="tb"/>
+                    <Border Width="1" Background="{StaticResource SubtleStrokeBrush}" Margin="6,4"/>
+                    <Button Content="Open Project" Command="{Binding OpenProjectCommand}" Classes="tb"/>
+                    <Button Content="Save Project" Command="{Binding SaveProjectCommand}"
+                            IsEnabled="{Binding IsImageLoaded}" Classes="tb"/>
+                </StackPanel>
+
+                <!-- Center: Overlay actions -->
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4"
+                            HorizontalAlignment="Center">
+                    <Button Command="{Binding AddTextOverlayCommand}"
+                            IsEnabled="{Binding IsImageLoaded}" Classes="tb">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <TextBlock Text="T" FontWeight="Bold" FontSize="13"
+                                       Foreground="{StaticResource AccentBrush}"/>
+                            <TextBlock Text="Add Text" FontSize="12"/>
+                        </StackPanel>
+                    </Button>
+                    <Button Command="{Binding AddImageOverlayCommand}"
+                            IsEnabled="{Binding IsImageLoaded}" Classes="tb">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <TextBlock Text="IMG" FontWeight="Bold" FontSize="10"
+                                       Foreground="{StaticResource AccentBrush}"
+                                       VerticalAlignment="Center"/>
+                            <TextBlock Text="Add Image" FontSize="12"/>
+                        </StackPanel>
+                    </Button>
+                    <Button Command="{Binding RemoveOverlayCommand}"
+                            IsEnabled="{Binding SelectedOverlay, Converter={x:Static ObjectConverters.IsNotNull}}"
+                            Classes="danger">
+                        <TextBlock Text="Remove Selected" FontSize="12"/>
+                    </Button>
+                </StackPanel>
+
+                <!-- Right: Export -->
+                <Button Grid.Column="2" Command="{Binding GenerateCommand}" Classes="accent">
+                    <TextBlock Text="Export All Pages" Foreground="White" FontSize="12"/>
+                </Button>
+            </Grid>
         </Border>
 
-        <!-- Main Content -->
-        <Grid Grid.Row="1" ColumnDefinitions="*,340">
+        <!-- ═══════════════════ MAIN CONTENT (3-column) ═══════════════════ -->
+        <Grid Grid.Row="1" ColumnDefinitions="240,*,340">
 
-            <!-- Image Canvas Area -->
-            <Border Grid.Column="0" Margin="10" BorderBrush="#aaa" BorderThickness="1"
-                    Background="#e8e8e8" ClipToBounds="True">
+            <!-- ─── LEFT: Page Navigation Pane ─── -->
+            <Border Grid.Column="0"
+                    Background="{StaticResource NavPaneBrush}"
+                    BorderBrush="{StaticResource SubtleStrokeBrush}"
+                    BorderThickness="0,0,1,0">
+              <Panel>
+                <!-- Empty state: no image loaded yet -->
+                <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center"
+                            Spacing="12" Margin="24"
+                            IsVisible="{Binding !IsImageLoaded}">
+                    <TextBlock Text="Get Started"
+                               HorizontalAlignment="Center"
+                               FontSize="16" FontWeight="SemiBold"
+                               Foreground="{StaticResource TextSecondaryBrush}"/>
+                    <TextBlock Text="Load a background image to begin creating pages."
+                               HorizontalAlignment="Center"
+                               TextAlignment="Center"
+                               FontSize="12" TextWrapping="Wrap"
+                               Foreground="{StaticResource TextTertiaryBrush}"/>
+                    <Button Click="OnLoadImageClick" Classes="accent"
+                            HorizontalAlignment="Center"
+                            Padding="20,10">
+                        <TextBlock Text="Load Image" Foreground="White" FontSize="13"/>
+                    </Button>
+                </StackPanel>
+
+                <!-- Page nav (visible only when image loaded) -->
+                <Grid RowDefinitions="Auto,*,Auto"
+                      IsVisible="{Binding IsImageLoaded}">
+
+                    <!-- Pane header -->
+                    <StackPanel Grid.Row="0" Margin="12,14,12,6" Spacing="10">
+                        <TextBlock Text="Pages"
+                                   FontSize="18" FontWeight="SemiBold"
+                                   Foreground="{StaticResource TextPrimaryBrush}"/>
+
+                        <!-- Nav arrows + counter -->
+                        <Border Background="{StaticResource LayerFillBrush}"
+                                CornerRadius="8" Padding="4"
+                                BorderBrush="{StaticResource CardStrokeBrush}"
+                                BorderThickness="1">
+                            <Grid ColumnDefinitions="32,*,32">
+                                <Button Grid.Column="0" Classes="icon"
+                                        Command="{Binding PreviousPageCommand}"
+                                        IsEnabled="{Binding CanGoPreviousPage}">
+                                    <TextBlock Text="&#x276E;" FontSize="12"
+                                               Foreground="{StaticResource TextSecondaryBrush}"/>
+                                </Button>
+                                <TextBlock Grid.Column="1"
+                                           Text="{Binding PageNavigationText}"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"
+                                           FontSize="12" FontWeight="SemiBold"
+                                           Foreground="{StaticResource TextSecondaryBrush}"/>
+                                <Button Grid.Column="2" Classes="icon"
+                                        Command="{Binding NextPageCommand}"
+                                        IsEnabled="{Binding CanGoNextPage}">
+                                    <TextBlock Text="&#x276F;" FontSize="12"
+                                               Foreground="{StaticResource TextSecondaryBrush}"/>
+                                </Button>
+                            </Grid>
+                        </Border>
+                    </StackPanel>
+
+                    <!-- Scrollable page list -->
+                    <ScrollViewer Grid.Row="1"
+                                  VerticalScrollBarVisibility="Auto"
+                                  HorizontalScrollBarVisibility="Disabled"
+                                  Margin="6,4,6,4">
+                        <ListBox Name="PageListBox"
+                                 Classes="rounded"
+                                 ItemsSource="{Binding Pages}"
+                                 SelectedIndex="{Binding CurrentPageIndex}"
+                                 SelectionChanged="OnPageSelectionChanged"
+                                 Background="Transparent"
+                                 Padding="2">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate x:DataType="vm:BookPage">
+                                    <Border Padding="10,8" Margin="0">
+                                        <Grid ColumnDefinitions="*,Auto">
+                                            <StackPanel Grid.Column="0" Spacing="1">
+                                                <TextBlock Text="{Binding Title}"
+                                                           FontSize="13" FontWeight="SemiBold"
+                                                           Foreground="{StaticResource TextPrimaryBrush}"
+                                                           TextTrimming="CharacterEllipsis"/>
+                                                <TextBlock FontSize="11"
+                                                           Foreground="{StaticResource TextTertiaryBrush}"
+                                                           IsVisible="{Binding PageNumber, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                                                    <TextBlock.Text>
+                                                        <Binding Path="PageNumber" StringFormat="p. {0}"/>
+                                                    </TextBlock.Text>
+                                                </TextBlock>
+                                            </StackPanel>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </ScrollViewer>
+
+                    <!-- Bottom: Page actions + current page props -->
+                    <StackPanel Grid.Row="2" Margin="12,4,12,12" Spacing="8">
+
+                        <!-- Add / Remove buttons -->
+                        <Grid ColumnDefinitions="*,6,*">
+                            <Button Grid.Column="0" Click="OnAddPageClick"
+                                    IsEnabled="{Binding IsImageLoaded}"
+                                    HorizontalAlignment="Stretch"
+                                    HorizontalContentAlignment="Center"
+                                    Classes="accent" Padding="0,8">
+                                <TextBlock Text="+ Add Page" Foreground="White" FontSize="12"/>
+                            </Button>
+                            <Button Grid.Column="2"
+                                    Command="{Binding RemovePageCommand}"
+                                    IsEnabled="{Binding HasPages}"
+                                    HorizontalAlignment="Stretch"
+                                    HorizontalContentAlignment="Center"
+                                    Classes="danger" Padding="0,8">
+                                <TextBlock Text="Remove" FontSize="12"/>
+                            </Button>
+                        </Grid>
+
+                        <!-- Current page properties card -->
+                        <Border Background="{StaticResource LayerFillBrush}"
+                                CornerRadius="8" Padding="12"
+                                BorderBrush="{StaticResource CardStrokeBrush}"
+                                BorderThickness="1"
+                                IsVisible="{Binding HasPages}">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="Page Details" FontSize="11" FontWeight="SemiBold"
+                                           Foreground="{StaticResource TextTertiaryBrush}"
+                                           Margin="0,0,0,2"/>
+                                <TextBox Text="{Binding CurrentPageTitle}"
+                                         Watermark="Page title..."
+                                         FontSize="13" CornerRadius="6"
+                                         Padding="10,7"/>
+                                <TextBox Text="{Binding CurrentPageNumber}"
+                                         Watermark="Page # (optional)"
+                                         FontSize="12" CornerRadius="6"
+                                         Padding="10,7"/>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </Grid>
+              </Panel>
+            </Border>
+
+            <!-- ─── CENTER: Image Canvas ─── -->
+            <Border Grid.Column="1" Margin="0"
+                    Background="#E5E5E5" ClipToBounds="True">
                 <Panel>
-                    <TextBlock Text="Load an image, then add text or image regions"
-                               HorizontalAlignment="Center" VerticalAlignment="Center"
-                               Foreground="#999" FontSize="14"
-                               IsVisible="{Binding !IsImageLoaded}"/>
+                    <!-- Empty state -->
+                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"
+                                Spacing="12"
+                                IsVisible="{Binding !IsImageLoaded}">
+                        <Border Width="64" Height="64" CornerRadius="16"
+                                Background="{StaticResource LayerFillBrush}"
+                                HorizontalAlignment="Center">
+                            <TextBlock Text="IMG" FontSize="18" FontWeight="Bold"
+                                       Foreground="{StaticResource TextTertiaryBrush}"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <TextBlock Text="No background image"
+                                   HorizontalAlignment="Center"
+                                   FontSize="16" FontWeight="SemiBold"
+                                   Foreground="{StaticResource TextTertiaryBrush}"/>
+                        <TextBlock Text="Use 'Load Image' to select a background, then add pages and overlays."
+                                   HorizontalAlignment="Center" TextAlignment="Center"
+                                   FontSize="13" MaxWidth="320" TextWrapping="Wrap"
+                                   Foreground="{StaticResource TextTertiaryBrush}"/>
+                    </StackPanel>
 
                     <Canvas Name="ImageCanvas"
                             PointerPressed="OnCanvasPointerPressed"
@@ -68,51 +253,79 @@
                         <Image Name="DisplayImage"
                                Source="{Binding ImageSource}"
                                Stretch="Uniform"/>
-                        <!-- Drawing-mode selection rectangle -->
                         <Border Name="SelectionBox"
-                                BorderBrush="#2196F3"
+                                BorderBrush="{StaticResource AccentLightBrush}"
                                 BorderThickness="2"
-                                Background="#332196F3"
-                                IsVisible="False"/>
+                                IsVisible="False">
+                            <Border.Background>
+                                <SolidColorBrush Color="{StaticResource AccentLightColor}" Opacity="0.15"/>
+                            </Border.Background>
+                        </Border>
                     </Canvas>
                 </Panel>
             </Border>
 
-            <!-- Controls Panel -->
-            <Border Grid.Column="1" Background="#fafafa" Padding="15" BorderBrush="#ccc" BorderThickness="1,0,0,0">
-                <ScrollViewer VerticalScrollBarVisibility="Auto">
-                    <StackPanel Spacing="12">
+            <!-- ─── RIGHT: Properties Panel ─── -->
+            <Border Grid.Column="2"
+                    Background="{StaticResource LayerFillAltBrush}"
+                    BorderBrush="{StaticResource SubtleStrokeBrush}"
+                    BorderThickness="1,0,0,0">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="14,14,14,14">
+                    <StackPanel Spacing="14">
 
-                        <!-- Overlay List -->
-                        <TextBlock Text="Overlay Regions" FontWeight="Bold" FontSize="16" Margin="0,0,0,2"/>
-                        <ListBox ItemsSource="{Binding Overlays}"
-                                 SelectedItem="{Binding SelectedOverlay}"
-                                 MaxHeight="160">
-                            <ListBox.ItemTemplate>
-                                <DataTemplate x:DataType="models:OverlayRegion">
-                                    <StackPanel Orientation="Horizontal" Spacing="6">
-                                        <Border Background="#e0e0e0" CornerRadius="3" Padding="4,1"
-                                                VerticalAlignment="Center">
-                                            <TextBlock Text="{Binding TypeIcon}" FontSize="10"
-                                                       FontWeight="Bold" Foreground="#555"/>
-                                        </Border>
-                                        <TextBlock Text="{Binding Label}" FontWeight="SemiBold"
-                                                   VerticalAlignment="Center"/>
-                                        <TextBlock Text="{Binding Summary}" Foreground="#888"
-                                                   MaxWidth="160" TextTrimming="CharacterEllipsis"
-                                                   VerticalAlignment="Center"/>
-                                    </StackPanel>
-                                </DataTemplate>
-                            </ListBox.ItemTemplate>
-                        </ListBox>
+                        <!-- Section: Overlay List -->
+                        <StackPanel Spacing="6">
+                            <TextBlock Text="Overlays" FontSize="15" FontWeight="SemiBold"
+                                       Foreground="{StaticResource TextPrimaryBrush}"/>
+                            <Border Background="{StaticResource LayerFillBrush}"
+                                    CornerRadius="8"
+                                    BorderBrush="{StaticResource CardStrokeBrush}"
+                                    BorderThickness="1"
+                                    Padding="4"
+                                    MinHeight="52" MaxHeight="180">
+                                <ListBox ItemsSource="{Binding Overlays}"
+                                         SelectedItem="{Binding SelectedOverlay}"
+                                         Background="Transparent"
+                                         Classes="rounded"
+                                         Padding="0">
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate x:DataType="models:OverlayRegion">
+                                            <Border Padding="8,6">
+                                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                                    <Border Background="{StaticResource AccentSubtleBrush}"
+                                                            CornerRadius="4" Padding="6,2"
+                                                            VerticalAlignment="Center">
+                                                        <TextBlock Text="{Binding TypeIcon}" FontSize="10"
+                                                                   FontWeight="Bold"
+                                                                   Foreground="{StaticResource AccentBrush}"/>
+                                                    </Border>
+                                                    <StackPanel Spacing="1" VerticalAlignment="Center">
+                                                        <TextBlock Text="{Binding Label}" FontWeight="SemiBold"
+                                                                   FontSize="12"
+                                                                   Foreground="{StaticResource TextPrimaryBrush}"/>
+                                                        <TextBlock Text="{Binding Summary}"
+                                                                   FontSize="11"
+                                                                   Foreground="{StaticResource TextTertiaryBrush}"
+                                                                   MaxWidth="180" TextTrimming="CharacterEllipsis"/>
+                                                    </StackPanel>
+                                                </StackPanel>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
+                            </Border>
+                        </StackPanel>
 
-                        <!-- Region position/size (shared) -->
-                        <Border Background="#fff" Padding="10" CornerRadius="4"
-                                BorderBrush="#ddd" BorderThickness="1"
+                        <!-- Section: Position info -->
+                        <Border Background="{StaticResource LayerFillBrush}"
+                                CornerRadius="8" Padding="12"
+                                BorderBrush="{StaticResource CardStrokeBrush}"
+                                BorderThickness="1"
                                 IsVisible="{Binding SelectedOverlay, Converter={x:Static ObjectConverters.IsNotNull}}">
-                            <TextBlock FontSize="12" Foreground="#666">
+                            <TextBlock FontSize="12" Foreground="{StaticResource TextSecondaryBrush}"
+                                       FontFamily="Consolas,Menlo,monospace">
                                 <TextBlock.Text>
-                                    <MultiBinding StringFormat="Position: ({0:F0}, {1:F0})  Size: {2:F0} x {3:F0}">
+                                    <MultiBinding StringFormat="X: {0:F0}  Y: {1:F0}  W: {2:F0}  H: {3:F0}">
                                         <Binding Path="SelectedOverlay.X"/>
                                         <Binding Path="SelectedOverlay.Y"/>
                                         <Binding Path="SelectedOverlay.Width"/>
@@ -122,148 +335,209 @@
                             </TextBlock>
                         </Border>
 
-                        <!-- TEXT OVERLAY PROPERTIES -->
-                        <Border Background="#fff" Padding="12" CornerRadius="4"
-                                BorderBrush="#ddd" BorderThickness="1"
+                        <!-- Section: TEXT OVERLAY PROPERTIES -->
+                        <Border Background="{StaticResource LayerFillBrush}"
+                                CornerRadius="8" Padding="14"
+                                BorderBrush="{StaticResource CardStrokeBrush}"
+                                BorderThickness="1"
                                 IsVisible="{Binding IsTextOverlaySelected}">
-                            <StackPanel Spacing="10" DataContext="{Binding SelectedTextOverlay}"
+                            <StackPanel Spacing="12" DataContext="{Binding SelectedTextOverlay}"
                                         x:DataType="models:TextOverlayRegion">
 
-                                <TextBlock Text="Text Properties" FontWeight="Bold" FontSize="14"/>
+                                <TextBlock Text="Text Properties" FontWeight="SemiBold" FontSize="14"
+                                           Foreground="{StaticResource TextPrimaryBrush}"/>
 
-                                <TextBlock Text="Overlay Text" FontWeight="SemiBold" FontSize="13"/>
-                                <TextBox Text="{Binding Text}"
-                                         Watermark="Enter text to overlay..."
-                                         AcceptsReturn="True"
-                                         TextWrapping="Wrap"
-                                         MinHeight="80"
-                                         MaxHeight="160"/>
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Content" FontSize="12" FontWeight="SemiBold"
+                                               Foreground="{StaticResource TextSecondaryBrush}"/>
+                                    <TextBox Text="{Binding Text}"
+                                             Watermark="Enter text to overlay..."
+                                             AcceptsReturn="True"
+                                             TextWrapping="Wrap"
+                                             MinHeight="72" MaxHeight="140"
+                                             CornerRadius="6" Padding="10,8"
+                                             FontSize="13"/>
+                                </StackPanel>
 
-                                <TextBlock Text="Font Family" FontWeight="SemiBold" FontSize="13"/>
-                                <ComboBox ItemsSource="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).AvailableFonts}"
-                                          SelectedItem="{Binding SelectedFont}"
-                                          HorizontalAlignment="Stretch">
-                                    <ComboBox.ItemTemplate>
-                                        <DataTemplate x:DataType="models:EmbeddedFont">
-                                            <TextBlock Text="{Binding DisplayName}" FontFamily="{Binding FontFamily}"/>
-                                        </DataTemplate>
-                                    </ComboBox.ItemTemplate>
-                                </ComboBox>
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Font" FontSize="12" FontWeight="SemiBold"
+                                               Foreground="{StaticResource TextSecondaryBrush}"/>
+                                    <ComboBox ItemsSource="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).AvailableFonts}"
+                                              SelectedItem="{Binding SelectedFont}"
+                                              HorizontalAlignment="Stretch"
+                                              CornerRadius="6">
+                                        <ComboBox.ItemTemplate>
+                                            <DataTemplate x:DataType="models:EmbeddedFont">
+                                                <TextBlock Text="{Binding DisplayName}" FontFamily="{Binding FontFamily}"
+                                                           FontSize="13"/>
+                                            </DataTemplate>
+                                        </ComboBox.ItemTemplate>
+                                    </ComboBox>
+                                </StackPanel>
 
-                                <TextBlock Text="Font Size" FontWeight="SemiBold" FontSize="13"/>
-                                <ComboBox ItemsSource="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).FontSizes}"
-                                          SelectedItem="{Binding FontSize}"
-                                          HorizontalAlignment="Stretch"/>
-
-                                <TextBlock Text="Font Color" FontWeight="SemiBold" FontSize="13"/>
-                                <Grid ColumnDefinitions="*,Auto">
-                                    <TextBox Grid.Column="0" Text="{Binding FontColor}"
-                                             Watermark="#000000" Margin="0,0,8,0"/>
-                                    <Border Grid.Column="1" Width="32" Height="32" CornerRadius="4"
-                                            BorderBrush="#ccc" BorderThickness="1">
-                                        <Border.Background>
-                                            <SolidColorBrush Color="{Binding FontColor}"/>
-                                        </Border.Background>
-                                    </Border>
+                                <Grid ColumnDefinitions="*,10,*">
+                                    <StackPanel Grid.Column="0" Spacing="4">
+                                        <TextBlock Text="Size" FontSize="12" FontWeight="SemiBold"
+                                                   Foreground="{StaticResource TextSecondaryBrush}"/>
+                                        <ComboBox ItemsSource="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).FontSizes}"
+                                                  SelectedItem="{Binding FontSize}"
+                                                  HorizontalAlignment="Stretch"
+                                                  CornerRadius="6"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2" Spacing="4">
+                                        <TextBlock Text="Align" FontSize="12" FontWeight="SemiBold"
+                                                   Foreground="{StaticResource TextSecondaryBrush}"/>
+                                        <ComboBox ItemsSource="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).AlignmentOptions}"
+                                                  SelectedItem="{Binding Alignment}"
+                                                  HorizontalAlignment="Stretch"
+                                                  CornerRadius="6"/>
+                                    </StackPanel>
                                 </Grid>
 
-                                <WrapPanel Orientation="Horizontal" HorizontalAlignment="Left">
-                                    <Button Content="  " Background="Black" Margin="2" Click="OnColorClick" Tag="#000000"
-                                            Width="28" Height="28" Padding="0"/>
-                                    <Button Content="  " Background="White" Margin="2" Click="OnColorClick" Tag="#FFFFFF"
-                                            Width="28" Height="28" Padding="0" BorderBrush="#ccc" BorderThickness="1"/>
-                                    <Button Content="  " Background="Red" Margin="2" Click="OnColorClick" Tag="#FF0000"
-                                            Width="28" Height="28" Padding="0"/>
-                                    <Button Content="  " Background="Blue" Margin="2" Click="OnColorClick" Tag="#0000FF"
-                                            Width="28" Height="28" Padding="0"/>
-                                    <Button Content="  " Background="Green" Margin="2" Click="OnColorClick" Tag="#008000"
-                                            Width="28" Height="28" Padding="0"/>
-                                    <Button Content="  " Background="Yellow" Margin="2" Click="OnColorClick" Tag="#FFFF00"
-                                            Width="28" Height="28" Padding="0"/>
-                                    <Button Content="  " Background="Orange" Margin="2" Click="OnColorClick" Tag="#FFA500"
-                                            Width="28" Height="28" Padding="0"/>
-                                    <Button Content="  " Background="Purple" Margin="2" Click="OnColorClick" Tag="#800080"
-                                            Width="28" Height="28" Padding="0"/>
-                                </WrapPanel>
-
-                                <TextBlock Text="Text Alignment" FontWeight="SemiBold" FontSize="13"/>
-                                <ComboBox ItemsSource="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).AlignmentOptions}"
-                                          SelectedItem="{Binding Alignment}"
-                                          HorizontalAlignment="Stretch"/>
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Color" FontSize="12" FontWeight="SemiBold"
+                                               Foreground="{StaticResource TextSecondaryBrush}"/>
+                                    <Grid ColumnDefinitions="*,8,36">
+                                        <TextBox Grid.Column="0" Text="{Binding FontColor}"
+                                                 Watermark="#000000"
+                                                 CornerRadius="6" Padding="10,7"
+                                                 FontSize="13"
+                                                 FontFamily="Consolas,Menlo,monospace"/>
+                                        <Border Grid.Column="2" Width="36" Height="36" CornerRadius="6"
+                                                BorderBrush="{StaticResource CardStrokeBrush}"
+                                                BorderThickness="1">
+                                            <Border.Background>
+                                                <SolidColorBrush Color="{Binding FontColor}"/>
+                                            </Border.Background>
+                                        </Border>
+                                    </Grid>
+                                    <WrapPanel Orientation="Horizontal" Margin="0,4,0,0">
+                                        <Button Click="OnColorClick" Tag="#000000" Classes="swatch">
+                                            <Border Width="26" Height="26" CornerRadius="6" Background="#1A1A1A"/>
+                                        </Button>
+                                        <Button Click="OnColorClick" Tag="#FFFFFF" Classes="swatch">
+                                            <Border Width="26" Height="26" CornerRadius="6" Background="White"
+                                                    BorderBrush="{StaticResource CardStrokeBrush}" BorderThickness="1"/>
+                                        </Button>
+                                        <Button Click="OnColorClick" Tag="#C42B1C" Classes="swatch">
+                                            <Border Width="26" Height="26" CornerRadius="6" Background="#C42B1C"/>
+                                        </Button>
+                                        <Button Click="OnColorClick" Tag="#005FB8" Classes="swatch">
+                                            <Border Width="26" Height="26" CornerRadius="6" Background="#005FB8"/>
+                                        </Button>
+                                        <Button Click="OnColorClick" Tag="#0F7B0F" Classes="swatch">
+                                            <Border Width="26" Height="26" CornerRadius="6" Background="#0F7B0F"/>
+                                        </Button>
+                                        <Button Click="OnColorClick" Tag="#FFB900" Classes="swatch">
+                                            <Border Width="26" Height="26" CornerRadius="6" Background="#FFB900"/>
+                                        </Button>
+                                        <Button Click="OnColorClick" Tag="#F7630C" Classes="swatch">
+                                            <Border Width="26" Height="26" CornerRadius="6" Background="#F7630C"/>
+                                        </Button>
+                                        <Button Click="OnColorClick" Tag="#881798" Classes="swatch">
+                                            <Border Width="26" Height="26" CornerRadius="6" Background="#881798"/>
+                                        </Button>
+                                    </WrapPanel>
+                                </StackPanel>
                             </StackPanel>
                         </Border>
 
-                        <!-- IMAGE OVERLAY PROPERTIES -->
-                        <Border Background="#fff" Padding="12" CornerRadius="4"
-                                BorderBrush="#ddd" BorderThickness="1"
+                        <!-- Section: IMAGE OVERLAY PROPERTIES -->
+                        <Border Background="{StaticResource LayerFillBrush}"
+                                CornerRadius="8" Padding="14"
+                                BorderBrush="{StaticResource CardStrokeBrush}"
+                                BorderThickness="1"
                                 IsVisible="{Binding IsImageOverlaySelected}">
-                            <StackPanel Spacing="10" DataContext="{Binding SelectedImageOverlay}"
+                            <StackPanel Spacing="12" DataContext="{Binding SelectedImageOverlay}"
                                         x:DataType="models:ImageOverlayRegion">
 
-                                <TextBlock Text="Image Properties" FontWeight="Bold" FontSize="14"/>
+                                <TextBlock Text="Image Properties" FontWeight="SemiBold" FontSize="14"
+                                           Foreground="{StaticResource TextPrimaryBrush}"/>
 
-                                <TextBlock Text="Image File" FontWeight="SemiBold" FontSize="13"/>
-                                <Grid ColumnDefinitions="*,Auto">
-                                    <TextBox Grid.Column="0" Text="{Binding ImagePath}"
-                                             IsReadOnly="True" Watermark="No image selected"
-                                             Margin="0,0,8,0"/>
-                                    <Button Grid.Column="1" Content="Browse"
-                                            Click="OnBrowseOverlayImageClick"/>
-                                </Grid>
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Source" FontSize="12" FontWeight="SemiBold"
+                                               Foreground="{StaticResource TextSecondaryBrush}"/>
+                                    <Grid ColumnDefinitions="*,6,Auto">
+                                        <TextBox Grid.Column="0" Text="{Binding ImagePath}"
+                                                 IsReadOnly="True" Watermark="No image selected"
+                                                 CornerRadius="6" Padding="10,7" FontSize="12"/>
+                                        <Button Grid.Column="2" Content="Browse"
+                                                Click="OnBrowseOverlayImageClick"
+                                                Classes="tb"/>
+                                    </Grid>
+                                </StackPanel>
 
-                                <TextBlock Text="Opacity" FontWeight="SemiBold" FontSize="13"/>
-                                <Grid ColumnDefinitions="*,50">
-                                    <Slider Grid.Column="0" Minimum="0" Maximum="100"
-                                            Value="{Binding Opacity}" TickFrequency="1"
-                                            IsSnapToTickEnabled="True"/>
-                                    <TextBlock Grid.Column="1" VerticalAlignment="Center"
-                                               HorizontalAlignment="Right">
-                                        <TextBlock.Text>
-                                            <Binding Path="Opacity" StringFormat="{}{0}%"/>
-                                        </TextBlock.Text>
-                                    </TextBlock>
-                                </Grid>
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Opacity" FontSize="12" FontWeight="SemiBold"
+                                               Foreground="{StaticResource TextSecondaryBrush}"/>
+                                    <Grid ColumnDefinitions="*,44">
+                                        <Slider Grid.Column="0" Minimum="0" Maximum="100"
+                                                Value="{Binding Opacity}" TickFrequency="1"
+                                                IsSnapToTickEnabled="True"/>
+                                        <TextBlock Grid.Column="1" VerticalAlignment="Center"
+                                                   HorizontalAlignment="Right"
+                                                   FontSize="12" FontWeight="SemiBold"
+                                                   Foreground="{StaticResource TextSecondaryBrush}">
+                                            <TextBlock.Text>
+                                                <Binding Path="Opacity" StringFormat="{}{0}%"/>
+                                            </TextBlock.Text>
+                                        </TextBlock>
+                                    </Grid>
+                                </StackPanel>
                             </StackPanel>
                         </Border>
 
                         <!-- Placeholder when nothing selected -->
-                        <TextBlock Text="Select or add an overlay region to edit its properties."
-                                   Foreground="#999" FontSize="13" TextWrapping="Wrap"
-                                   IsHitTestVisible="False">
-                            <TextBlock.IsVisible>
+                        <Border Background="{StaticResource LayerFillBrush}"
+                                CornerRadius="8" Padding="20"
+                                BorderBrush="{StaticResource CardStrokeBrush}"
+                                BorderThickness="1">
+                            <Border.IsVisible>
                                 <Binding Path="SelectedOverlay" Converter="{x:Static ObjectConverters.IsNull}"/>
-                            </TextBlock.IsVisible>
-                        </TextBlock>
+                            </Border.IsVisible>
+                            <TextBlock Text="Select or draw an overlay region to edit its properties."
+                                       Foreground="{StaticResource TextTertiaryBrush}"
+                                       FontSize="13" TextWrapping="Wrap"
+                                       TextAlignment="Center"/>
+                        </Border>
 
-                        <!-- Output Path -->
-                        <TextBlock Text="Output Path" FontWeight="SemiBold" FontSize="13" Margin="0,8,0,0"/>
-                        <Grid ColumnDefinitions="*,Auto">
-                            <TextBox Grid.Column="0" Text="{Binding OutputPath}"
-                                     Watermark="Output file path..." Margin="0,0,8,0"/>
-                            <Button Grid.Column="1" Content="Browse"
-                                    Command="{Binding BrowseOutputCommand}"/>
-                        </Grid>
-
-                        <!-- Generate Button -->
-                        <Button Content="Generate Image"
-                                Command="{Binding GenerateCommand}"
-                                HorizontalAlignment="Stretch"
-                                HorizontalContentAlignment="Center"
-                                Background="#2196F3"
-                                Foreground="White"
-                                FontWeight="Bold"
-                                FontSize="15"
-                                Padding="12"
-                                Margin="0,10,0,0"/>
+                        <!-- Section: Output -->
+                        <StackPanel Spacing="6">
+                            <TextBlock Text="Output" FontSize="15" FontWeight="SemiBold"
+                                       Foreground="{StaticResource TextPrimaryBrush}"
+                                       Margin="0,4,0,0"/>
+                            <Border Background="{StaticResource LayerFillBrush}"
+                                    CornerRadius="8" Padding="12"
+                                    BorderBrush="{StaticResource CardStrokeBrush}"
+                                    BorderThickness="1">
+                                <StackPanel Spacing="6">
+                                    <TextBlock Text="Export Folder" FontSize="12" FontWeight="SemiBold"
+                                               Foreground="{StaticResource TextSecondaryBrush}"/>
+                                    <Grid ColumnDefinitions="*,6,Auto">
+                                        <TextBox Grid.Column="0" Text="{Binding OutputPath}"
+                                                 Watermark="Choose output folder..."
+                                                 CornerRadius="6" Padding="10,7" FontSize="12"/>
+                                        <Button Grid.Column="2" Content="Browse"
+                                                Command="{Binding BrowseOutputCommand}"
+                                                Classes="tb"/>
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
 
                     </StackPanel>
                 </ScrollViewer>
             </Border>
         </Grid>
 
-        <!-- Status Bar -->
-        <Border Grid.Row="2" Background="#f0f0f0" Padding="8" BorderBrush="#ccc" BorderThickness="0,1,0,0">
-            <TextBlock Text="{Binding StatusMessage}" FontSize="12" Foreground="#555"/>
+        <!-- ═══════════════════ STATUS BAR ═══════════════════ -->
+        <Border Grid.Row="2"
+                Background="{StaticResource LayerFillBrush}"
+                BorderBrush="{StaticResource SubtleStrokeBrush}"
+                BorderThickness="0,1,0,0"
+                Padding="16,5">
+            <TextBlock Text="{Binding StatusMessage}" FontSize="12"
+                       Foreground="{StaticResource TextSecondaryBrush}"/>
         </Border>
 
     </Grid>
