@@ -41,5 +41,5 @@ jobs:
       - name: Upload to GitHub Release
         env:
           GH_TAG: ${{ github.ref_name }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: vpk upload github --repoUrl https://github.com/codeprada/teasha-book-generator --tag "$env:GH_TAG" --token "$env:GH_TOKEN"
