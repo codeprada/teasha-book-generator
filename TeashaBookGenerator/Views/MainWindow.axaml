@@ -17,10 +17,65 @@
         <vm:MainWindowViewModel/>
     </Design.DataContext>
 
-    <Grid RowDefinitions="Auto,*,Auto">
+    <Grid RowDefinitions="Auto,Auto,*,Auto">
+
+        <!-- ═══════════════════ UPDATE BANNER ═══════════════════ -->
+        <Border Grid.Row="0"
+                Background="#005FB8"
+                Padding="12,8"
+                IsVisible="{Binding IsUpdateAvailable}">
+            <Grid ColumnDefinitions="*,Auto,Auto">
+                <!-- Status text / progress -->
+                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8"
+                            VerticalAlignment="Center">
+                    <TextBlock Text="Update available:" FontSize="13" FontWeight="SemiBold"
+                               Foreground="White" VerticalAlignment="Center"
+                               IsVisible="{Binding !IsUpdateDownloading}"/>
+                    <TextBlock Text="{Binding UpdateVersion}" FontSize="13"
+                               Foreground="White" VerticalAlignment="Center"
+                               IsVisible="{Binding !IsUpdateDownloading}"/>
+                    <TextBlock Text="Downloading update..." FontSize="13" FontWeight="SemiBold"
+                               Foreground="White" VerticalAlignment="Center"
+                               IsVisible="{Binding IsUpdateDownloading}"/>
+                    <ProgressBar Minimum="0" Maximum="100"
+                                 Value="{Binding UpdateDownloadProgress}"
+                                 Width="160" Height="6"
+                                 VerticalAlignment="Center"
+                                 IsVisible="{Binding IsUpdateDownloading}"/>
+                    <TextBlock FontSize="12" Foreground="White" VerticalAlignment="Center"
+                               IsVisible="{Binding IsUpdateDownloading}">
+                        <TextBlock.Text>
+                            <Binding Path="UpdateDownloadProgress" StringFormat="{}{0}%"/>
+                        </TextBlock.Text>
+                    </TextBlock>
+                </StackPanel>
+
+                <!-- Download & Restart button -->
+                <Button Grid.Column="1"
+                        Command="{Binding DownloadAndApplyUpdateCommand}"
+                        IsVisible="{Binding !IsUpdateDownloading}"
+                        Margin="8,0"
+                        Padding="12,4"
+                        Background="White" Foreground="#005FB8"
+                        FontSize="12" FontWeight="SemiBold"
+                        CornerRadius="4">
+                    <TextBlock Text="Download &amp; Restart"/>
+                </Button>
+
+                <!-- Dismiss button -->
+                <Button Grid.Column="2"
+                        Command="{Binding DismissUpdateCommand}"
+                        IsVisible="{Binding !IsUpdateDownloading}"
+                        Padding="6,2"
+                        Background="Transparent"
+                        CornerRadius="4">
+                    <TextBlock Text="&#x2715;" Foreground="White" FontSize="14"/>
+                </Button>
+            </Grid>
+        </Border>
 
         <!-- ═══════════════════ TOP COMMAND BAR ═══════════════════ -->
-        <Border Grid.Row="0"
+        <Border Grid.Row="1"
                 Background="{StaticResource LayerFillBrush}"
                 BorderBrush="{StaticResource SubtleStrokeBrush}"
                 BorderThickness="0,0,0,1"
@@ -70,7 +125,7 @@
         </Border>
 
         <!-- ═══════════════════ MAIN CONTENT (3-column) ═══════════════════ -->
-        <Grid Grid.Row="1" ColumnDefinitions="240,*,340">
+        <Grid Grid.Row="2" ColumnDefinitions="240,*,340">
 
             <!-- ─── LEFT: Page Navigation Pane ─── -->
             <Border Grid.Column="0"
@@ -531,7 +586,7 @@
         </Grid>
 
         <!-- ═══════════════════ STATUS BAR ═══════════════════ -->
-        <Border Grid.Row="2"
+        <Border Grid.Row="3"
                 Background="{StaticResource LayerFillBrush}"
                 BorderBrush="{StaticResource SubtleStrokeBrush}"
                 BorderThickness="0,1,0,0"

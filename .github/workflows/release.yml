@@ -1,0 +1,49 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            rid: win-x64
+          - os: ubuntu-latest
+            rid: linux-x64
+          - os: macos-latest
+            rid: osx-x64
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Publish
+        run: dotnet publish TeashaBookGenerator/TeashaBookGenerator.csproj -c Release -r ${{ matrix.rid }} --self-contained -o publish
+
+      - name: Install Velopack CLI
+        run: dotnet tool install -g vpk
+
+      - name: Extract version from tag
+        id: version
+        shell: bash
+        run: |
+          TAG_NAME="${GITHUB_REF_NAME}"
+          echo "VERSION=${TAG_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Pack with Velopack
+        env:
+          PACK_VERSION: ${{ steps.version.outputs.VERSION }}
+        run: vpk pack --packId TeashaBookGenerator --packVersion "$PACK_VERSION" --packDir publish --mainExe TeashaBookGenerator
+
+      - name: Upload to GitHub Release
+        env:
+          GH_TAG: ${{ github.ref_name }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: vpk upload github --repoUrl https://github.com/codeprada/teasha-book-generator --tag "$GH_TAG" --token "$GH_TOKEN"

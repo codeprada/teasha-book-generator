@@ -14,6 +14,8 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ImageMagick;
 using TeashaBookGenerator.Models;
+using TeashaBookGenerator.Services;
+using Velopack;
 
 namespace TeashaBookGenerator.ViewModels;
 
@@ -157,6 +159,23 @@ public partial class MainWindowViewModel : ViewModelBase
         }
     }
 
+    // ── Update properties ──
+
+    [ObservableProperty]
+    private bool _isUpdateAvailable;
+
+    [ObservableProperty]
+    private string _updateVersion = string.Empty;
+
+    [ObservableProperty]
+    private bool _isUpdateDownloading;
+
+    [ObservableProperty]
+    private int _updateDownloadProgress;
+
+    private UpdateService? _updateService;
+    private UpdateInfo? _pendingUpdateInfo;
+
     public event Action? PreviewInvalidated;
 
     private readonly Dictionary<string, string> _fontFileCache = new();
@@ -165,6 +184,63 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         Overlays.CollectionChanged += OnOverlaysCollectionChanged;
         InitializeFonts();
+    }
+
+    public MainWindowViewModel(UpdateService updateService) : this()
+    {
+        _updateService = updateService;
+        _ = CheckForUpdateInBackgroundAsync();
+    }
+
+    private async Task CheckForUpdateInBackgroundAsync()
+    {
+        if (_updateService == null || !_updateService.IsInstalled) return;
+
+        try
+        {
+            await Task.Delay(3000);
+            UpdateInfo? updateInfo = await _updateService.CheckForUpdatesAsync();
+            if (updateInfo != null)
+            {
+                _pendingUpdateInfo = updateInfo;
+                UpdateVersion = updateInfo.TargetFullRelease.Version.ToString();
+                IsUpdateAvailable = true;
+            }
+        }
+        catch (Exception)
+        {
+            // Update check failures are non-fatal
+        }
+    }
+
+    [RelayCommand]
+    private async Task DownloadAndApplyUpdateAsync()
+    {
+        if (_updateService == null || _pendingUpdateInfo == null) return;
+
+        try
+        {
+            IsUpdateDownloading = true;
+            UpdateDownloadProgress = 0;
+
+            await _updateService.DownloadUpdateAsync(_pendingUpdateInfo, progress =>
+            {
+                UpdateDownloadProgress = progress;
+            });
+
+            _updateService.ApplyUpdateAndRestart(_pendingUpdateInfo);
+        }
+        catch (Exception ex)
+        {
+            IsUpdateDownloading = false;
+            StatusMessage = $"Update failed: {ex.Message}";
+        }
+    }
+
+    [RelayCommand]
+    private void DismissUpdate()
+    {
+        IsUpdateAvailable = false;
     }
 
     private void InitializeFonts()
