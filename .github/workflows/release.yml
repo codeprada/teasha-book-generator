@@ -36,10 +36,10 @@ jobs:
       - name: Pack with Velopack
         env:
           PACK_VERSION: ${{ steps.version.outputs.VERSION }}
-        run: vpk pack --packId TeashaBookGenerator --packVersion "$PACK_VERSION" --packDir publish --mainExe TeashaBookGenerator
+        run: vpk pack --packId TeashaBookGenerator --packVersion "$env:PACK_VERSION" --packDir publish --mainExe TeashaBookGenerator.exe
 
       - name: Upload to GitHub Release
         env:
           GH_TAG: ${{ github.ref_name }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: vpk upload github --repoUrl https://github.com/codeprada/teasha-book-generator --tag "$GH_TAG" --token "$GH_TOKEN"
+        run: vpk upload github --repoUrl https://github.com/codeprada/teasha-book-generator --tag "$env:GH_TAG" --token "$env:GH_TOKEN"
